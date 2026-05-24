@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./workspaces/cli-lib" },
+    { "path": "./workspaces/cli-elm-kernel-patcher" }
+  ]
+}

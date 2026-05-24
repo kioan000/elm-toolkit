@@ -1,0 +1,11 @@
+{
+  "author": "kioan000",
+  "name": "@elm-toolkit/cli-lib",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "CLI common utilities library",
+  "main": "./index.ts",
+  "dependencies": {},
+  "devDependencies": {},
+  "private": true
+}
