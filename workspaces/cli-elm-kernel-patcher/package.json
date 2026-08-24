@@ -8,16 +8,16 @@
   "types": "./dist/command.d.ts",
   "exports": {
     ".": {
-      "command-types": "./dist/command.d.ts",
-      "command": "./dist/command.js",
-      "patcher": "./dist/patcher",
-      "patcher-types": "./dist/patcher.d.ts"
-    }
+      "types": "./dist/command.d.ts",
+      "default": "./dist/command.js"
+    },
+    "./patcher": {
+      "types": "./dist/lib/patcher.d.ts",
+      "default": "./dist/lib/patcher.js"
+    },
+    "./package.json": "./package.json"
   },
-  "bin": {
-    "cli-elm-kernel-patcher-js": "./dist/command.js",
-    "cli-elm-kernel-patcher-ts": "./command.ts"
-  },
+  "bin": "./dist/command.js",
   "files": [
     "dist",
     "command.ts",
@@ -32,6 +32,7 @@
   "scripts": {
     "build": "tsc -b && cp lib/patches.tar.gz dist/lib/patches.tar.gz",
     "clean": "tsc -b --clean",
+    "dev": "node command.ts",
     "prepare": "yarn build"
   },
   "dependencies": {

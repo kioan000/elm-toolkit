@@ -1,4 +1,4 @@
-#!/usr/bin/env -S node --experimental-transform-types
+#!/usr/bin/env node
 import { prettyError } from '@elm-toolkit/cli-lib'
 import { Command } from 'commander'
 import * as Patcher from './lib/patcher.ts'

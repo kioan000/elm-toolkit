@@ -15,17 +15,23 @@ picks them up.
 cli-elm-kernel-patcher [--useArchive <bool>] [--elmJsonFolder <path>]
 ```
 
-The package ships two equivalent executables:
+The package installs a single executable, `cli-elm-kernel-patcher`, which runs
+the compiled JavaScript in `dist/`. Node refuses to strip types from files under
+`node_modules`, so the TypeScript sources cannot be executed from an installed
+package — they ship only to back the source maps and declaration maps.
 
-- **`cli-elm-kernel-patcher`** — runs the TypeScript source directly via Node's
-  `--experimental-transform-types` (no build step required).
-- **`cli-elm-kernel-patcher-js`** — runs the compiled JavaScript output. No
-  experimental flag, marginally faster startup.
+Inside this monorepo the TypeScript entry point can be run directly; Node 24
+strips types natively and needs no flag:
 
-When installing from npm both are linked automatically. In a fresh clone of the
-monorepo the `-js` bin is only linked after the first build, so a second
-`yarn install` is needed to populate the symlink (the non-`-js` bin works from
-the first install).
+```sh
+yarn workspace @elm-toolkit/cli-elm-kernel-patcher dev --help
+```
+
+The patching routines are also importable:
+
+```ts
+import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
+```
 
 ### Options
 

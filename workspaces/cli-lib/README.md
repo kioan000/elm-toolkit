@@ -24,5 +24,5 @@ await sleep(500)
 
 ## Requirements
 
-Node `>= 24.15 < 25`. The package ships as TypeScript and is loaded directly via
-Node's `--experimental-transform-types`; there is no build step.
+Node `>= 24.15 < 25`. The package is compiled to `dist/` with `tsc -b`; the
+TypeScript sources ship alongside it to back the source maps.
