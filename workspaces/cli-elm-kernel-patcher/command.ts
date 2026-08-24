@@ -26,7 +26,7 @@ function command(): Command {
     )
     .option(
       '--elmJsonFolder <type>',
-      'Your project folder where elm.json is container, if not specified current working dir is used instead'
+      'Your project folder where elm.json stands, if not specified current working dir is used instead'
     )
     .action(({ elmJsonFolder, useArchive }) => {
       try {
