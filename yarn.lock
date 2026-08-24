@@ -13,8 +13,7 @@ __metadata:
     commander: "npm:^14.0.3"
     typescript: "npm:^6.0.3"
   bin:
-    cli-elm-kernel-patcher-js: ./dist/command.js
-    cli-elm-kernel-patcher-ts: ./command.ts
+    cli-elm-kernel-patcher: ./dist/command.js
   languageName: unknown
   linkType: soft
 
@@ -997,7 +996,6 @@ __metadata:
     globals: "npm:^17.6.0"
     jiti: "npm:^2.7.0"
     prettier: "npm:^3.8.3"
-    tsc: "npm:^2.0.4"
     typescript: "npm:^6.0.3"
     typescript-eslint: "npm:^8.59.4"
   languageName: unknown
@@ -1966,15 +1964,6 @@ __metadata:
   peerDependencies:
     typescript: ">=4.8.4"
   checksum: 10c0/767849383c114e7f1971fa976b20e73ac28fd0c70d8d65c0004790bf4d8f89888c7e4cf6d5949f9c1beae9bc3c64835bef77bbe27fddf45a3c7b60cebcf85c8c
-  languageName: node
-  linkType: hard
-
-"tsc@npm:^2.0.4":
-  version: 2.0.4
-  resolution: "tsc@npm:2.0.4"
-  bin:
-    tsc: bin/tsc
-  checksum: 10c0/4651d344891d995e62ab7ca64ce0a8597bbdc2d392886c9956d15caab4dc9bfe86e759d3385b3f97c49fb5294194a161d6812673e3f51e46357c82482f32c3ab
   languageName: node
   linkType: hard
 
