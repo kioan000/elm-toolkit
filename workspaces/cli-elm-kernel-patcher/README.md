@@ -27,6 +27,11 @@ strips types natively and needs no flag:
 yarn workspace @elm-toolkit/cli-elm-kernel-patcher dev --help
 ```
 
+In a fresh clone the `cli-elm-kernel-patcher` symlink only appears after the
+first build: Yarn links bins before `postinstall` produces `dist/`, so a second
+`yarn install` is needed to populate it. Installs from npm are unaffected —
+`dist/` is inside the tarball. The `dev` script works from the first install.
+
 The patching routines are also importable:
 
 ```ts
