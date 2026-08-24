@@ -4,15 +4,41 @@
   "name": "@elm-toolkit/cli-elm-kernel-patcher",
   "version": "0.0.1",
   "description": "CLI script for patch elm library",
-  "main": "./command.ts",
+  "main": "./dist/command.js",
+  "types": "./dist/command.d.ts",
+  "exports": {
+    ".": {
+      "command-types": "./dist/command.d.ts",
+      "command": "./dist/command.js",
+      "patcher": "./dist/patcher",
+      "patcher-types": "./dist/patcher.d.ts"
+    }
+  },
+  "bin": {
+    "cli-elm-kernel-patcher-js": "./dist/command.js",
+    "cli-elm-kernel-patcher-ts": "./command.ts"
+  },
+  "files": [
+    "dist",
+    "command.ts",
+    "lib/patcher.ts",
+    "lib/patches.tar.gz",
+    "README.md"
+  ],
   "engines": {
     "node": ">= 24.15.0 < 25",
     "npm": ">= 11.4.1 <12"
   },
+  "scripts": {
+    "build": "tsc -b && cp lib/patches.tar.gz dist/lib/patches.tar.gz",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build"
+  },
   "dependencies": {
+    "@elm-toolkit/cli-lib": "workspace:^",
     "commander": "^14.0.3"
   },
-  "devDependencies": {},
-  "private": true,
-  "bin": "./command.ts"
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
 }

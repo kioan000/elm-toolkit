@@ -4,8 +4,25 @@
   "type": "module",
   "version": "0.0.1",
   "description": "CLI common utilities library",
-  "main": "./index.ts",
-  "dependencies": {},
-  "devDependencies": {},
-  "private": true
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
 }
