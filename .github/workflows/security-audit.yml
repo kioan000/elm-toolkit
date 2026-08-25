@@ -1,0 +1,34 @@
+name: Security audit
+
+# Dependabot opens security pull requests when an advisory is published, which
+# depends on alerts being enabled for the repository. This job is the scheduled
+# counterpart: it asks the registry every week whether anything in the installed
+# tree is known to be vulnerable, and reports it in one place.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  audit:
+    name: Audit the dependency tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: corepack enable
+
+      - run: yarn install --immutable
+
+      # Transitive dependencies are included, because most advisories reach a
+      # project that way. The job fails on high and critical findings only, so
+      # that a low severity advisory does not turn the schedule red every week.
+      - name: Audit
+        run: yarn npm audit --all --recursive --severity high

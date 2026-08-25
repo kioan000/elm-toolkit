@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  # Covers the root manifest and every workspace, because Dependabot reads the
+  # Yarn workspace layout from the root.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: quarterly
+    open-pull-requests-limit: 5
+    groups:
+      # Security updates are raised by Dependabot alerts as soon as an advisory
+      # is published, not by the schedule above, which covers version updates
+      # only. Grouping them keeps one pull request per batch instead of one per
+      # advisory.
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+      development:
+        dependency-type: development
+      production:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: quarterly
+    open-pull-requests-limit: 3
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+      actions:
+        patterns:
+          - '*'

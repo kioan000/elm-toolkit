@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  check:
+    name: Lint, format, build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: corepack enable
+
+      # The install also builds every workspace, through the root postinstall
+      # script, and fails if the lockfile is not current.
+      - run: yarn install --immutable
+
+      - run: yarn eslint .
+
+      - run: yarn prettier --check .
+
+      - run: yarn test
