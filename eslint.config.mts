@@ -14,11 +14,7 @@ export default tseslint.config(
       perfectionist: perfectionistPlugin,
       tsdoc: tsdocPlugin,
     },
-    extends: [
-      tseslint.configs.recommended,
-      importPlugin.flatConfigs.recommended,
-      importPlugin.flatConfigs.typescript,
-    ],
+    extends: [tseslint.configs.recommended, importPlugin.flatConfigs.recommended, importPlugin.flatConfigs.typescript],
     settings: {
       'import-x/resolver': {
         typescript: {
