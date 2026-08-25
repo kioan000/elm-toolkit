@@ -1,88 +1,123 @@
 # AGENTS.md
 
-Conventions for this repo. Written for whoever, or whatever, works on it next.
+Working rules for this repository. Explanations written for people live in the
+README files. This file states the rules and points to those explanations.
 
-Everything in the repo itself, code, comments, commit messages, docs, is in
-English, regardless of the language a discussion happens in.
+## Language
+
+All repository content is in English: code, comments, documentation, commit
+messages and pull request descriptions.
+
+Write simple English that an international reader can audit. Use short
+sentences. Put one idea in each sentence. Do not use idioms. Do not use a
+phrasal verb when a plain verb exists. Do not use metaphors that depend on a
+culture.
 
 ## Toolchain
 
-The package manager is Yarn 4, pinned through `packageManager` and resolved by
-corepack. A globally installed Yarn 1 is a common thing to have around, and it
-will happily rewrite `yarn.lock` into the Classic format if you let it, so run
-package manager commands as `corepack yarn ...` unless you know your shell
-resolves Yarn 4 already.
+Use Yarn 4 through corepack. Run package manager commands as `corepack yarn`.
+A global Yarn 1 is common on developer machines and rewrites `yarn.lock` into
+the Classic format when it runs by mistake.
 
-`nodeLinker` is set to `node-modules`; we are not on PnP.
+Node 24 is required. The linker is `node-modules`, not PnP.
 
-Node is pinned to 24.x through `engines`.
+Build and release commands are described in the root README.
 
-## Build
+## Build and publishing rules
 
-Each workspace compiles with `tsc -b` into its own `dist/`, using project
-references to express the dependency between them. The root orchestrates with
-`yarn workspaces foreach -A -t run build`, where `-t` gives the topological
-ordering that the references need.
+Published entry points must be compiled JavaScript. Node does not strip types
+from files under `node_modules`, so a TypeScript entry point fails as soon as
+the package is installed. The root README explains this in full.
 
-The root `postinstall` looks redundant next to the per-workspace `prepare`
-scripts, but it is not: Yarn does not run workspace `prepare` scripts during
-`yarn install`, so removing `postinstall` means a fresh install builds nothing.
-The `prepare` scripts still matter, they run for `npm publish`.
+Prove that a package works by packing it and installing the tarball into an
+empty project. Inside the monorepo a workspace link resolves outside
+`node_modules`, so a broken package can still appear to work.
 
-Two things that will waste your afternoon if you do not know them:
+Keys in an `exports` map are conditions, not free labels. An unknown key
+resolves to nothing instead of raising an error.
 
-A stale `.tsbuildinfo` left behind without its `dist/` makes `tsc -b` decide
-everything is up to date and emit nothing, which then surfaces as a confusing
-"cannot find module" from whichever workspace depends on the one that silently
-did not build. Delete both, or run `yarn clean`.
+## Documentation
 
-In a fresh clone the CLI bin symlink only appears after the second
-`yarn install`, because Yarn links bins before `postinstall` has produced
-`dist/`. Installs from npm are not affected.
+### How to comment
 
-## Publishing
+Read both subsections below before you write a comment. They describe different
+artifacts. Neither one replaces the other.
 
-Node 24 strips types natively, but it refuses to do so for files under
-`node_modules`. A published package therefore cannot have a `.ts` entry point;
-every `bin`, `main` and `exports` target must be compiled JavaScript. TypeScript
-sources are still shipped, but only to back source maps and declaration maps.
+- API documentation: doc comments on exported symbols and on modules.
+- Inline comments: comments written inside a function body.
 
-This is easy to get wrong without noticing, because inside the monorepo the
-workspace symlinks resolve outside `node_modules` and `.ts` entry points appear
-to work fine. Before trusting that a package is consumable, pack it and install
-the tarball into a throwaway project:
+Both follow the language rules above. Explain the purpose and the approach at a
+high level. Implementation detail belongs in the code, unless one detail is the
+reason the code has its current shape.
 
-```sh
-corepack yarn workspace <name> pack -o /tmp/pkg.tgz
-cd $(mktemp -d) && npm init -y && npm install /tmp/pkg.tgz
-```
+#### API documentation
 
-Then actually run the bin and import the entry points. Anything less does not
-prove much.
+Every exported symbol has a doc comment. Every module has a doc comment.
 
-`exports` keys are conditions, not free-form labels. Custom names silently
-resolve to nothing rather than failing loudly, so subpaths belong on the left
-side of the map (`"./patcher"`), and `types`/`default` on the right.
+Write the content the way Elm package documentation is written.
 
-## Repo hygiene
+Start with the purpose. Say what the symbol is for and when a caller needs it.
+Do not repeat the signature in words. The signature already states the types.
 
-Editor and OS files stay out: no `.idea` additions, no `.DS_Store`. Some
-JetBrains files were committed early on and are still tracked; leave them unless
-you are deliberately cleaning that up.
+Add a small example that shows a real call and its result. Use realistic values
+instead of placeholder names.
 
-`yarn.lock` stays in the Yarn 4 format. A diff of a few thousand lines against
-it almost always means Yarn 1 ran somewhere.
+State each edge case in one line: empty input, missing file, unusual values.
+
+A module doc is a guided tour, not an index. Give the reader the mental model
+and the order in which to read the parts. Do not list the exported names,
+because the code is already that list.
+
+Give every exported symbol the same level of care.
+
+Use the TSDoc structure to carry this prose. Keep `@param` and `@returns`
+present, and write them in the same voice as the summary, with a direct
+reference to the input and the output.
+
+ESLint enforces `tsdoc/syntax`. The `eslint-plugin-jsdoc` rules stay disabled on
+purpose, because JSDoc type annotations belong to a JavaScript workflow and
+TypeScript already carries the types.
+
+Tag form:
+
+- `@param name - description`, with one space on each side of the hyphen. TSDoc
+  requires the hyphen.
+- `@returns description`, with no hyphen.
+- Never write a type inside a tag.
+- `@example` starts with one line of prose, then a fenced `TypeScript` block.
+
+#### Inline comments
+
+Write an inline comment only when a detail is hard to understand from the code.
+
+Use one or two lines as a rule. Write more only when the problem needs the
+space.
+
+Explain a decision or a trap. Do not describe what the next statement does.
+
+### What not to write
+
+Do not duplicate. When the same explanation fits a README and this file, put it
+in the README and point to it from here.
+
+Avoid content that has to be realigned with the code and returns nothing.
+Counts and inventories are the usual case, for example how many packages exist
+or which functions a module exports.
+
+Use this test on any list. If the code can change and make the list false
+without anyone noticing, remove the list. If the list is the reason the code has
+its current shape, keep it.
 
 ## Commits and pull requests
 
-Conventional prefixes, one concern per commit. A commit that migrates a lockfile
-does not also rename a bin.
+Use conventional prefixes. Keep one concern in each commit.
 
-Write commit messages and PR descriptions for a person. Lead with what changed
-and why it needed changing; describe the how in broad strokes and only go into
-technical detail where the detail is the point, for instance an error that
-explains a decision. Prose over bullet soup, and use commas and semicolons where
-you would be tempted to reach for a dash.
+Start with what changed and why it needed to change. Describe the approach at a
+high level. Add technical detail only where that detail is the point.
 
-Commit messages and PR descriptions carry no assistant signatures, trailers
-or "generated by" footers.
+Use commas and semicolons instead of dashes.
+
+Do not add assistant signatures, trailers or "generated by" footers.
+
+Ask before you commit. Report the change and the proposed message, then let the
+maintainer decide.
