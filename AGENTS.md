@@ -36,6 +36,11 @@ empty project. Inside the monorepo a workspace link resolves outside
 Keys in an `exports` map are conditions, not free labels. An unknown key
 resolves to nothing instead of raising an error.
 
+Running TypeScript with Node does not check it. Node removes the types and runs
+what is left, so a type error survives and reports nothing. Any script that runs
+`.ts` files directly needs a `tsc` step in front of it, otherwise the types in
+those files are decoration.
+
 ## Documentation
 
 ### How to comment
