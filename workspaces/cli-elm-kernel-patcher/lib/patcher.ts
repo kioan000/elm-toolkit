@@ -1,3 +1,18 @@
+/**
+ * Replaces Elm kernel packages inside `ELM_HOME` with a patched copy.
+ *
+ * Elm compiles against the package sources it keeps in `ELM_HOME`, so patching a
+ * kernel package means editing that shared folder and then clearing the caches
+ * Elm would otherwise reuse.
+ *
+ * Callers use the module in two steps. `prepareArgs` resolves every path the work
+ * depends on and returns them as one value, and `replaceKernelPackages` performs
+ * the patching. Keeping the two apart makes the resolved paths visible before
+ * anything is written to disk.
+ *
+ * @packageDocumentation
+ */
+
 import { prettyInfo } from '@elm-toolkit/cli-lib'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -7,11 +22,23 @@ import * as childProcess from 'node:child_process'
 const __dirname = import.meta.dirname
 
 /**
- * Prepare arguments for replaceKernelFunction
+ * Resolves every path the patching depends on, so a caller can inspect them
+ * before any file is touched.
  *
- * @param useArchive - if true uses archive zip or folder mode
- * @param elmJsonFolder - specify project elm.json folder, calling folder is used instead
- * @returns a ReplaceKernelArgs object
+ * The Elm home comes from `ELM_HOME` when it is set, and from the user home
+ * directory otherwise. The project folder falls back to `INIT_CWD`, which npm and
+ * yarn set when they run a script, and then to the current working directory.
+ *
+ * @example
+ *
+ * Patch the project in the current folder using the bundled archive
+ * ```TypeScript
+ *   replaceKernelPackages(prepareArgs(true))
+ * ```
+ *
+ * @param useArchive - true to extract the bundled archive, false to read a `patches/` folder
+ * @param elmJsonFolder - the folder holding the project's `elm.json`
+ * @returns the resolved paths and options, ready for `replaceKernelPackages`
  */
 export function prepareArgs(useArchive: boolean, elmJsonFolder?: string): ReplaceKernelArgs {
   const ROOT = elmJsonFolder ?? process.env.INIT_CWD ?? process.cwd()
@@ -31,6 +58,12 @@ export function prepareArgs(useArchive: boolean, elmJsonFolder?: string): Replac
   }
 }
 
+/**
+ * Every path and option one patching run needs, as produced by `prepareArgs`.
+ *
+ * The values are read only inputs. Printing this value is the quickest way to see
+ * which folders a run is about to read and write.
+ */
 export type ReplaceKernelArgs = {
   CURRENT: string
   ELM_HOME: string
@@ -42,6 +75,28 @@ export type ReplaceKernelArgs = {
   USE_ARCHIVE: boolean
 }
 
+/**
+ * Copies the patched packages into `ELM_HOME` and clears the caches that would
+ * hide them from the next compilation.
+ *
+ * The function refuses to run when a patched package does not carry the version
+ * that `elm.json` pins, because a mismatch would silently corrupt the shared Elm
+ * home. It also stops when a patched package holds more than one version.
+ *
+ * Repeated runs are cheap. Each patched package records where its code came from,
+ * and a run that finds the same record already in place skips the copy.
+ *
+ * @example
+ *
+ * Apply the bundled patches to the current project
+ * ```TypeScript
+ *   replaceKernelPackages(prepareArgs(true))
+ * ```
+ *
+ * @param args - the resolved paths and options from `prepareArgs`
+ * @throws Error when `elm.json` cannot be read, when a version does not match the
+ * pinned one, or when a patched package holds more than one version
+ */
 export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   prettyInfo('> Running:', 'Elm Kernel Replacement script with given params')
   console.info(args)
@@ -51,9 +106,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   try {
     elmJsonDependencies = parseElmJsonDependencies(path.join(args.PROJECT_ELM_ROOT, 'elm.json'))
   } catch (error) {
-    throw new Error(
-      `Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `
-    )
+    throw new Error(`Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `)
   }
   let alreadyUpToDate = true
   if (args.USE_ARCHIVE) {
@@ -81,12 +134,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
           for ${packageIdentifier} in elm.json, but got: ${String(elmJsonVersion)}`)
       }
 
-      const destinationDir = path.join(
-        args.ELM_HOME_PACKAGES,
-        user.name,
-        package_.name,
-        version.name
-      )
+      const destinationDir = path.join(args.ELM_HOME_PACKAGES, user.name, package_.name, version.name)
 
       // ALL packages in patch archive must have a source.txt file showing
       // where the code was taken from. We use that to see if elm-home/
@@ -119,7 +167,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   if (
     alreadyUpToDate &&
     fs.existsSync(oDat) &&
-    // This is specific to lydell/virtual-dom: Change as needed if you patch other things.•
+    // This is specific to lydell/virtual-dom: Change as needed if you patch other things.
     !fs.readFileSync(oDat, 'utf-8').includes('_VirtualDom_createTNode')
   ) {
     alreadyUpToDate = false
@@ -142,11 +190,12 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
 }
 
 /**
- * Parser for elm-json project
+ * Reads the dependencies of an Elm project, direct and indirect together, because
+ * a kernel patch can apply to either kind.
  *
- * @param elmJsonPath - path for elm. json
- * @returns - a list of dependencies stated in elm.json
- * @throws error in case of parsing failures
+ * @param elmJsonPath - path to the project's `elm.json`
+ * @returns the package names mapped to the versions the project pins
+ * @throws Error when the file is not valid JSON or lacks the expected structure
  */
 function parseElmJsonDependencies(elmJsonPath: string): Record<string, string> {
   const elmJson = JSON.parse(fs.readFileSync(elmJsonPath, 'utf-8'))
@@ -167,9 +216,10 @@ function parseElmJsonDependencies(elmJsonPath: string): Record<string, string> {
 }
 
 /**
- * Scans current directory to find members within
- * @param dir - directory path
- * @returns a list of entries child of this directory (excluded hidden files)
+ * Lists the entries of a directory with their full paths, skipping hidden files.
+ *
+ * @param dir - the directory to read
+ * @returns one entry per visible child, with its name and its full path
  */
 function readDir(dir: string): Array<{ name: string; path: string }> {
   return fs

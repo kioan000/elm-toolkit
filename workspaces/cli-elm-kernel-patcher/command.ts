@@ -1,37 +1,57 @@
 #!/usr/bin/env node
-import { prettyError } from '@elm-toolkit/cli-lib'
+
+/**
+ * The command line interface of the Elm kernel patcher.
+ *
+ * The module builds the command and exports it, and only parses the arguments
+ * when Node started this file. Importing it therefore has no effect, which lets a
+ * caller read the command definition without running the patcher.
+ *
+ * @packageDocumentation
+ */
+
+import { isEntryPoint, prettyError, readPackageJson } from '@elm-toolkit/cli-lib'
 import { Command } from 'commander'
-import { realpathSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
 import * as Patcher from './lib/patcher.ts'
 
 const program = command()
 
+/**
+ * The patcher command, built but not yet parsed.
+ *
+ * Import it to inspect the options or to run the command with arguments of your
+ * own. Nothing happens until `parse` is called.
+ *
+ * @example
+ *
+ * Run the command with explicit arguments
+ * ```TypeScript
+ *   program.parse(['--elmJsonFolder', '/path/to/project'], { from: 'user' })
+ * ```
+ */
 export default program
 
-if (isEntryPoint()) {
+if (isEntryPoint(import.meta.url)) {
   program.parse()
 }
 
 /**
- * CLI for elm-kernel-replacement command
- * @returns - a valid Command instance for the elm-kernel-replacement command (and its options)
+ * Builds the command, with its options and the action that runs the patcher.
+ *
+ * The command is returned unparsed, so that building it stays free of side
+ * effects.
+ *
+ * @returns the command, ready to be parsed by the caller
  */
 function command(): Command {
   const program = new Command()
 
   program
     .name('cli-elm-kernel-patcher')
-    .description(
-      'This scripts changes your current ELM_HOME folder with a given set of kernel patches'
-    )
-    .version('0.0.1')
+    .description('This scripts changes your current ELM_HOME folder with a given set of kernel patches')
+    .version(readPackageJson(import.meta.url).version)
   program
-    .option(
-      '--useArchive <type>',
-      'Whether or not use the patches archive as source of truth, true is default',
-      'true'
-    )
+    .option('--useArchive <type>', 'Whether or not use the patches archive as source of truth, true is default', 'true')
     .option(
       '--elmJsonFolder <type>',
       'Your project folder where elm.json stands, if not specified current working dir is used instead'
@@ -51,26 +71,4 @@ function command(): Command {
     })
 
   return program
-}
-
-/**
- * Whether this module is the program Node was started with, as opposed to being
- * imported by something else. process.argv[1] holds the path Node was given,
- * which for an installed CLI is the symlink in node_modules/.bin, while
- * import.meta.url is always the resolved file; the symlink has to be followed
- * before the two can be compared.
- * @returns - true when the module is running as the entry point
- */
-function isEntryPoint(): boolean {
-  const entry = process.argv[1]
-
-  if (entry === undefined) {
-    return false
-  }
-
-  try {
-    return import.meta.url === pathToFileURL(realpathSync(entry)).href
-  } catch {
-    return false
-  }
 }
