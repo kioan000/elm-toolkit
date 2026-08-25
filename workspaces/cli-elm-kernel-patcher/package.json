@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@elm-toolkit/cli-lib": "workspace:^",
-    "commander": "^14.0.3"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3"
