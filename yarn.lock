@@ -25,6 +25,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@elm-toolkit/integration-tests@workspace:workspaces/integration-tests":
+  version: 0.0.0-use.local
+  resolution: "@elm-toolkit/integration-tests@workspace:workspaces/integration-tests"
+  dependencies:
+    typescript: "npm:^6.0.3"
+  languageName: unknown
+  linkType: soft
+
 "@emnapi/core@npm:1.10.0":
   version: 1.10.0
   resolution: "@emnapi/core@npm:1.10.0"

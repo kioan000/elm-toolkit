@@ -1,0 +1,19 @@
+{
+  "author": "kioan000",
+  "name": "@elm-toolkit/integration-tests",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Tests that check the other workspaces once they are packed and installed",
+  "private": true,
+  "engines": {
+    "node": ">= 24.15.0 < 25",
+    "npm": ">= 11.4.1 <12"
+  },
+  "scripts": {
+    "test": "yarn typecheck && node --test \"**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
