@@ -25,6 +25,17 @@ jobs:
 
       - run: corepack enable
 
+      # Placed after corepack enable on purpose. The cache input of setup-node
+      # restores before corepack has created the yarn shim, so it cannot detect
+      # the package manager. Yarn verifies every entry against the checksums in
+      # the lockfile, which makes a partial restore safe.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            yarn-${{ runner.os }}-
+
       - run: yarn install --immutable
 
       # Transitive dependencies are included, because most advisories reach a
