@@ -8,6 +8,20 @@ updates:
     schedule:
       interval: quarterly
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint does not support TypeScript 7, and ESLint cannot even
+      # load its configuration when that version is installed. Remove this once
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940 is
+      # closed.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      # The major version of these types follows the Node major they describe,
+      # so it has to match the runtime declared in engines rather than the
+      # latest release. Raise it by hand when the pinned Node version moves.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
     groups:
       # Security updates are raised by Dependabot alerts as soon as an advisory
       # is published, not by the schedule above, which covers version updates
