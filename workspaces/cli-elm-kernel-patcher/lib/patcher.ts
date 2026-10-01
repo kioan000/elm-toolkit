@@ -108,11 +108,35 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   } catch (error) {
     throw new Error(`Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `)
   }
-  let alreadyUpToDate = true
   if (args.USE_ARCHIVE) {
     prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCH_ARCHIVE)
     childProcess.execFileSync('tar', ['-xzf', args.PATCH_ARCHIVE, '-C', args.CURRENT])
   }
+
+  // The archive is extracted into a temporary folder, which must go even when a check below stops the run.
+  try {
+    applyPatches(args, elmJsonDependencies)
+  } finally {
+    if (args.USE_ARCHIVE) {
+      prettyInfo('> Running: ', "I'm removing the unarchived patch folder:", args.PATCH_DIR)
+      fs.rmSync(args.PATCH_DIR, { force: true, recursive: true })
+    }
+  }
+
+  prettyInfo('> Done: ', 'Finished successfully\n')
+}
+
+/**
+ * Checks each extracted patched package against the versions that `elm.json` pins,
+ * then copies the packages into `ELM_HOME` when the copy there is out of date.
+ *
+ * @param args - the resolved paths and options from `prepareArgs`
+ * @param elmJsonDependencies - the package names mapped to the versions the project pins
+ * @throws Error when a version does not match the pinned one, or when a patched
+ * package holds more than one version
+ */
+function applyPatches(args: ReplaceKernelArgs, elmJsonDependencies: Record<string, string>): void {
+  let alreadyUpToDate = true
 
   for (const user of readDir(args.PATCH_DIR)) {
     for (const package_ of readDir(user.path)) {
@@ -180,13 +204,6 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
     prettyInfo('> Running: ', 'Invalidate cache fingerprint for: ', args.PROJECT_ELM_STUFF)
     fs.rmSync(args.PROJECT_ELM_STUFF, { force: true, recursive: true })
   }
-
-  if (args.USE_ARCHIVE) {
-    prettyInfo('> Running: ', "I'm removing the unarchived patch folder:", args.PATCH_DIR)
-    fs.rmSync(args.PATCH_DIR, { force: true, recursive: true })
-  }
-
-  prettyInfo('> Done: ', 'Finished successfully\n')
 }
 
 /**
