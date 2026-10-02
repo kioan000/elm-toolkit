@@ -36,6 +36,17 @@ jobs:
           restore-keys: |
             yarn-${{ runner.os }}-
 
+      # The tests run the real Elm compiler, which downloads the packages that the
+      # test projects pin into ~/.elm. Restoring that folder keeps most runs away
+      # from package.elm-lang.org. An older cache is safe, because Elm downloads
+      # only what is missing.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.elm
+          key: elm-${{ runner.os }}-${{ hashFiles('workspaces/*/test/fixtures/**/elm.json') }}
+          restore-keys: |
+            elm-${{ runner.os }}-
+
       # The install also builds every workspace, through the root postinstall
       # script, and fails if the lockfile is not current.
       - run: yarn install --immutable
