@@ -1,0 +1,42 @@
+{
+  "author": "kioan000",
+  "type": "module",
+  "name": "@elm-toolkit/webpack-elm-kernel-patcher-plugin",
+  "version": "0.0.1",
+  "description": "Webpack plugin that patches the Elm kernel packages before the first compilation",
+  "license": "BSD-3-Clause",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">= 24.15.0 < 25",
+    "npm": ">= 11.4.1 <12"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@elm-toolkit/cli-elm-kernel-patcher": "workspace:^",
+    "@elm-toolkit/cli-lib": "workspace:^"
+  },
+  "peerDependencies": {
+    "webpack": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "webpack": "^5.111.1"
+  }
+}

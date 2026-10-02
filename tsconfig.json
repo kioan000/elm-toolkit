@@ -4,6 +4,7 @@
     { "path": "./workspaces/cli-lib" },
     { "path": "./workspaces/cli-elm-kernel-patcher" },
     { "path": "./workspaces/node-elm-compiler" },
-    { "path": "./workspaces/webpack-elm-loader" }
+    { "path": "./workspaces/webpack-elm-loader" },
+    { "path": "./workspaces/webpack-elm-kernel-patcher-plugin" }
   ]
 }

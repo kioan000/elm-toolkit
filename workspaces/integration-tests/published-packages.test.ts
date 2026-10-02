@@ -24,6 +24,7 @@ const workspaces = [
   '@elm-toolkit/cli-elm-kernel-patcher',
   '@elm-toolkit/node-elm-compiler',
   '@elm-toolkit/webpack-elm-loader',
+  '@elm-toolkit/webpack-elm-kernel-patcher-plugin',
 ]
 
 let consumer: string
@@ -126,6 +127,15 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
       const loader = await import('@elm-toolkit/webpack-elm-loader')
       const hot = await import('@elm-toolkit/webpack-elm-loader/hot')
       console.log(typeof loader.default, typeof hot.default)
+    `)
+
+    assert.equal(exported, 'function function')
+  })
+
+  it('exposes the kernel patcher plugin as a default export', () => {
+    const exported = runInConsumer(`
+      const plugin = await import('@elm-toolkit/webpack-elm-kernel-patcher-plugin')
+      console.log(typeof plugin.default, typeof new plugin.default({ isEnabled: false }).apply)
     `)
 
     assert.equal(exported, 'function function')
