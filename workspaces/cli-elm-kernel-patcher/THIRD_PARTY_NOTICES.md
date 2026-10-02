@@ -5,6 +5,14 @@ that the copyright notice and the license text travel with every copy, so they
 are reproduced here in full, exactly as published. The README of the package
 says what each project contributed and thanks its authors.
 
+## replace-kernel-packages.mjs, from elm-safe-virtual-dom
+
+https://github.com/lydell/elm-safe-virtual-dom
+
+The patching routine in `lib/patcher.ts` is based on the
+`replace-kernel-packages.mjs` script by Simon Lydell, and is published under
+BSD-3-Clause with his permission.
+
 ## elm/virtual-dom, as forked by lydell
 
 https://github.com/lydell/virtual-dom
