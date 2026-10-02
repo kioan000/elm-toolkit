@@ -75,8 +75,9 @@ function getFiles(context: LoaderContext<ElmLoaderOptions>, options: ElmLoaderOp
  * @returns Parsed loader options
  */
 function parseLoaderOptions(context: LoaderContext<ElmLoaderOptions>): ElmLoaderOptions {
-  // In webpack 5+, options might be in context.query as an object or string
-  const query = context.query || context.resourceQuery || ''
+  // The options come from the rule, as an object or a query string. The query of the requested
+  // module, such as `./Main.elm?v=2`, belongs to the import and is not read.
+  const query = context.query || ''
 
   // If query is already an object, return it directly
   if (typeof query === 'object') {
@@ -128,16 +129,24 @@ function getOptions(context: LoaderContext<ElmLoaderOptions>, mode: string | und
 }
 
 /**
- * Read source directories from elm.json.
+ * Read source directories from elm.json. A package has no source-directories
+ * field, so its src folder is used; a missing elm.json gives no directories.
  *
  * @param cwd - Current working directory
  * @returns Array of source directory paths
  */
 function filesToWatch(cwd: string): string[] {
-  const readFile = fs.readFileSync(path.join(cwd, 'elm.json'), 'utf8')
-  const elmPackage = JSON.parse(readFile) as { 'source-directories': string[] }
+  const elmJsonPath = path.join(cwd, 'elm.json')
 
-  return elmPackage['source-directories'].map((dir) => path.join(cwd, dir))
+  // Without elm.json the compiler fails with its own, clearer message.
+  if (!fs.existsSync(elmJsonPath)) {
+    return []
+  }
+
+  const elmJson = JSON.parse(fs.readFileSync(elmJsonPath, 'utf8')) as { 'source-directories'?: string[] }
+
+  // A package lists no source directories; its modules are always in src.
+  return (elmJson['source-directories'] ?? ['src']).map((dir) => path.join(cwd, dir))
 }
 
 /**

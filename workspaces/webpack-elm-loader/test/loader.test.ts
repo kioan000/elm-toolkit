@@ -11,7 +11,7 @@
  * @packageDocumentation
  */
 
-import { readdirSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'node:test'
@@ -34,6 +34,10 @@ const source = (name: string): string => path.join(project, 'src', `${name}.elm`
 const main = source('Main')
 const inProject = { cwd: project, pathToElm: findElmBinary() }
 
+// The watch tests below need only what the loader reads before it compiles, and a real compiler
+// started in a folder without elm.json would wait for an answer on the terminal.
+const missingElm = path.join(import.meta.dirname, 'no-such-elm')
+
 // Present only when Elm adds the debugger; the name alone also appears in builds without it.
 const debuggerDefinition = /var _Debugger_element = F4/
 
@@ -48,6 +52,7 @@ async function runLoader(settings: {
   mode?: 'development' | 'none' | 'production'
   query: object | string
   resourcePath?: string
+  resourceQuery?: string
   watching?: boolean
 }): Promise<LoaderRun> {
   const run: LoaderRun = { contextDependencies: [], dependencies: [], error: null, output: undefined }
@@ -73,7 +78,7 @@ async function runLoader(settings: {
     },
     query: settings.query,
     resourcePath: settings.resourcePath ?? main,
-    resourceQuery: '',
+    resourceQuery: settings.resourceQuery ?? '',
   } as unknown as LoaderContext
 
   await elmWebpackLoader.call(context)
@@ -151,7 +156,7 @@ describe('the Elm loader', () => {
   })
 
   it('passes a missing compiler to webpack as an error instead of crashing', async () => {
-    const run = await runLoader({ query: { ...inProject, pathToElm: path.join(import.meta.dirname, 'no-such-elm') } })
+    const run = await runLoader({ query: { ...inProject, pathToElm: missingElm } })
 
     assert.match(run.error?.message ?? '', /Could not find Elm compiler/)
   })
@@ -161,6 +166,49 @@ describe('the Elm loader', () => {
 
     assert.deepEqual(run.dependencies, [path.join(project, 'elm.json'), source('Greeting')])
     assert.deepEqual(run.contextDependencies, [path.join(project, 'src')])
+  })
+
+  it('ignores the query of the requested module when the rule has no options', async () => {
+    const originalPath = process.env.PATH
+    const originalCwd = process.cwd()
+
+    // Without options the loader finds the compiler on the PATH and the project in the current directory.
+    process.env.PATH = `${path.dirname(inProject.pathToElm)}${path.delimiter}${originalPath}`
+    process.chdir(project)
+
+    const run = runLoader({ query: '', resourceQuery: '?v=2' }).finally(() => {
+      process.env.PATH = originalPath
+      process.chdir(originalCwd)
+    })
+
+    assert.match(compiled(await run), /Hello from Elm/)
+  })
+
+  it('watches the src folder of a package, whose elm.json lists no source directories', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'elm-package-'))
+
+    try {
+      writeFileSync(path.join(directory, 'elm.json'), JSON.stringify({ type: 'package' }))
+
+      const run = await runLoader({ query: { cwd: directory, pathToElm: missingElm }, watching: true })
+
+      assert.deepEqual(run.contextDependencies, [path.join(directory, 'src')])
+    } finally {
+      rmSync(directory, { force: true, recursive: true })
+    }
+  })
+
+  it('leaves a missing elm.json to the compiler instead of failing to read it', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'elm-nothing-'))
+
+    try {
+      const run = await runLoader({ query: { cwd: directory, pathToElm: missingElm }, watching: true })
+
+      assert.match(run.error?.message ?? '', /Could not find Elm compiler/, 'the error should come from the compiler')
+      assert.deepEqual(run.contextDependencies, [])
+    } finally {
+      rmSync(directory, { force: true, recursive: true })
+    }
   })
 
   it('watches nothing outside watch mode', async () => {
