@@ -1,0 +1,59 @@
+name: Release
+
+# The packages are not on the npm registry. Pushing a tag such as v0.1.0 packs
+# every public workspace and attaches the archives to a GitHub release, so that
+# a project can install them by URL. The root README explains how.
+on:
+  push:
+    tags: ['v*']
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  check:
+    name: Check
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Pack the packages and publish the release
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to create the release and upload the archives.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: corepack enable
+
+      # Same cache as the CI workflow; see the comment there.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            yarn-${{ runner.os }}-
+
+      # The install also builds every workspace, so dist/ is ready to pack.
+      - run: yarn install --immutable
+
+      # Yarn names a scoped archive @elm-toolkit-<name>-<version>.tgz. The at
+      # sign is dropped so that the names follow npm pack and the URLs stay plain.
+      - name: Pack every public workspace
+        run: |
+          mkdir archives
+          yarn workspaces foreach -A --no-private pack --out "$PWD/archives/%s-%v.tgz"
+          for archive in archives/@*.tgz; do
+            mv "$archive" "archives/$(basename "$archive" | cut -c 2-)"
+          done
+          ls archives
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" archives/*.tgz --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
