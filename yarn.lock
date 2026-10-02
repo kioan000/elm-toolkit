@@ -83,6 +83,7 @@ __metadata:
   dependencies:
     "@elm-toolkit/cli-elm-kernel-patcher": "workspace:^"
     "@elm-toolkit/cli-lib": "workspace:^"
+    elm: "npm:^0.19.2-0"
     typescript: "npm:^6.0.3"
     webpack: "npm:^5.111.1"
   peerDependencies:

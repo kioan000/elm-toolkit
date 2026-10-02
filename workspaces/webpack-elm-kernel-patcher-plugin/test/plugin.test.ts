@@ -9,8 +9,9 @@
  * @packageDocumentation
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, it, mock } from 'node:test'
@@ -19,6 +20,7 @@ import assert from 'node:assert/strict'
 import createWebpackCompiler from 'webpack'
 
 import ElmKernelReplacementPlugin from '../index.ts'
+import { findElmBinary } from './elm-binary.ts'
 
 // The versions of the packages inside the patch archive of the patcher.
 const patchedVersions = { 'elm/browser': '1.0.2', 'elm/html': '1.0.1', 'elm/virtual-dom': '1.0.5' }
@@ -88,7 +90,12 @@ describe('ElmKernelReplacementPlugin', () => {
 
   afterEach(() => {
     mock.restoreAll()
-    process.env.ELM_HOME = originalElmHome
+    // Assigning undefined would store the string "undefined", so a variable that was not set is removed.
+    if (originalElmHome === undefined) {
+      delete process.env.ELM_HOME
+    } else {
+      process.env.ELM_HOME = originalElmHome
+    }
     rmSync(elmHome, { force: true, recursive: true })
     rmSync(project, { force: true, recursive: true })
   })
@@ -116,6 +123,33 @@ describe('ElmKernelReplacementPlugin', () => {
       assert.equal(existsSync(elmStuff), false)
     })
   }
+
+  it('makes the Elm 0.19.2 compiler build against the patched kernel', () => {
+    const fixture = path.join(import.meta.dirname, 'fixtures', 'project')
+    const output = path.join(elmHome, 'main.js')
+    const compile = (home: string | undefined, to: string): void => {
+      const env = { ...process.env, ELM_HOME: home }
+
+      if (home === undefined) {
+        delete env.ELM_HOME
+      }
+      execFileSync(findElmBinary(), ['make', 'src/Main.elm', `--output=${to}`], { cwd: fixture, env, stdio: 'ignore' })
+    }
+
+    // The first build fills the usual ELM_HOME, which CI caches, so the temporary one is a copy
+    // and the packages are downloaded once; the usual ELM_HOME itself is never patched.
+    compile(originalElmHome, '/dev/null')
+    cpSync(path.join(originalElmHome ?? path.join(homedir(), '.elm'), '0.19.2'), path.join(elmHome, '0.19.2'), {
+      recursive: true,
+    })
+    rmSync(path.join(fixture, 'elm-stuff'), { force: true, recursive: true })
+
+    createCompiler(new ElmKernelReplacementPlugin({ elmJsonFolder: fixture, isEnabled: true }))
+    compile(elmHome, output)
+
+    // Only the patched elm/virtual-dom defines this function.
+    assert.match(readFileSync(output, 'utf8'), /_VirtualDom_createTNode/)
+  })
 
   it('stops webpack when elm.json pins a version that the patches do not cover', () => {
     writeElmJson({ ...patchedVersions, 'elm/virtual-dom': '1.0.3' })
