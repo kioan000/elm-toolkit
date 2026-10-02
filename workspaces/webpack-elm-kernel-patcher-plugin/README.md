@@ -9,6 +9,11 @@ must be in place before the Elm loader runs. The plugin calls the patcher in the
 before the build. The hook runs once, and a rebuild in watch mode does not patch
 again.
 
+The patched `elm/core` reloads itself in development builds, and the hot loader
+of `@elm-toolkit/webpack-elm-loader` then uses it instead of its own runtime. A
+project that does not use this plugin keeps the official kernel, and hot
+reloading still works through that runtime.
+
 ## Usage
 
 ```js

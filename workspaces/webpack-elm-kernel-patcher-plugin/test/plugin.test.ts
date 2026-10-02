@@ -23,7 +23,12 @@ import ElmKernelReplacementPlugin from '../index.ts'
 import { findElmBinary } from './elm-binary.ts'
 
 // The versions of the packages inside the patch archive of the patcher.
-const patchedVersions = { 'elm/browser': '1.0.2', 'elm/html': '1.0.1', 'elm/virtual-dom': '1.0.5' }
+const patchedVersions = {
+  'elm/browser': '1.0.2',
+  'elm/core': '1.0.5',
+  'elm/html': '1.0.1',
+  'elm/virtual-dom': '1.0.5',
+}
 
 // The Elm versions that the patcher supports.
 const supportedElmVersions = ['0.19.1', '0.19.2']
@@ -147,8 +152,16 @@ describe('ElmKernelReplacementPlugin', () => {
     createCompiler(new ElmKernelReplacementPlugin({ elmJsonFolder: fixture, isEnabled: true }))
     compile(elmHome, output)
 
-    // Only the patched elm/virtual-dom defines this function.
-    assert.match(readFileSync(output, 'utf8'), /_VirtualDom_createTNode/)
+    const compiled = readFileSync(output, 'utf8')
+    const scope: { Elm?: { hot?: { reload?: unknown } } } = {}
+
+    // Running the compiled code only defines the program; nothing renders until init is called.
+    mock.method(console, 'warn', () => undefined)
+    new Function(compiled).call(scope)
+
+    // Only the patched elm/virtual-dom defines this function, and only the patched elm/core offers Elm.hot.
+    assert.match(compiled, /_VirtualDom_createTNode/)
+    assert.equal(typeof scope.Elm?.hot?.reload, 'function', 'a development build should reload itself')
   })
 
   it('stops webpack when elm.json pins a version that the patches do not cover', () => {

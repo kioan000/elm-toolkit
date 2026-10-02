@@ -12,8 +12,16 @@ refuses to run when the patched version and the pinned version disagree.
 ## Where the patches come from
 
 The patches are not ours. They come from the patched Elm kernel packages that
-[lydell](https://github.com/lydell) maintains as forks, covering `elm/virtual-dom`,
-`elm/browser` and `elm/html`. All credit for that work belongs there.
+[lydell](https://github.com/lydell) maintains as forks, covering `elm/core`,
+`elm/virtual-dom`, `elm/browser` and `elm/html`. All credit for that work belongs
+there.
+
+The `elm/core`, `elm/browser` and `elm/virtual-dom` sources come from the
+branches of [elm/core#1155](https://github.com/elm/core/pull/1155) and its
+companion pull requests, which are still open. That `elm/core` reloads itself in
+a development build, through `Elm.hot.reload()`, and the hot loader of
+`@elm-toolkit/webpack-elm-loader` uses it when it is there. A production build,
+made with `--optimize`, does not include that code.
 
 This package only carries those sources and applies them safely. Every patched
 package includes a `source.txt` file that records the exact upstream commit its
@@ -27,8 +35,8 @@ with a long and careful explanation of how Elm uses `ELM_HOME`. This adapted
 version is published with his permission. Thank you, Simon, for the forks, the
 script and the explanation.
 
-The forks are based on the `elm/virtual-dom`, `elm/browser` and `elm/html`
-packages by Evan Czaplicki, and they keep his license. The license texts are
+The forks are based on the `elm/core`, `elm/virtual-dom`, `elm/browser` and
+`elm/html` packages by Evan Czaplicki, and they keep his license. The license texts are
 in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Usage
