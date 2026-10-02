@@ -54,10 +54,28 @@ describe('inject', () => {
       const original = builds[`Main ${mode}`]
       const result = inject(original)
       const runtimeStart = result.indexOf('HMR BEGIN')
+      const wrapperClose = result.lastIndexOf(wrapperEnd)
 
       assert.ok(runtimeStart > result.lastIndexOf('_Platform_export('), 'the runtime should follow the export')
-      assert.ok(result.trimEnd().endsWith(wrapperEnd), 'the wrapper should still close the output')
+      assert.ok(runtimeStart < wrapperClose, 'the runtime should stay inside the Elm wrapper')
       assert.ok(result.startsWith(original.slice(0, original.lastIndexOf('_Platform_export('))))
+    })
+
+    it(`keeps the elm-hot runtime off when the kernel offers Elm.hot, in the ${mode} build`, () => {
+      const result = inject(builds[`Main ${mode}`])
+
+      assert.ok(
+        result.lastIndexOf("if (!(scope['Elm'] && scope['Elm'].hot)) {") < result.indexOf('HMR BEGIN'),
+        'the elm-hot runtime should be guarded by a check for Elm.hot'
+      )
+    })
+
+    it(`hands updates to Elm.hot.reload after the Elm wrapper, in the ${mode} build`, () => {
+      const result = inject(builds[`Main ${mode}`])
+      const coreReloadStart = result.indexOf('ELM CORE HOT RELOAD BEGIN')
+
+      assert.ok(coreReloadStart > result.lastIndexOf(wrapperEnd), 'the Elm.hot code should follow the wrapper')
+      assert.match(result.slice(coreReloadStart), /running\.hot\.reload\(\{ Elm: Elm \}\)/)
     })
 
     it(`tags the navigation key of an application in the ${mode} build`, () => {
@@ -68,6 +86,14 @@ describe('inject', () => {
       assert.ok(!inject(builds[`Main ${mode}`]).includes(navigationKeyTag))
     })
   }
+
+  it('tags the navigation key of a kernel that calls impl.onUrlChange', () => {
+    // The browser fork of elm/core#1155 reads onUrlChange from impl instead of a local variable.
+    const withImpl = builds['Application debug'].replace(/key\.a\(\s*onUrlChange\(/u, 'key.a(impl.onUrlChange(')
+
+    assert.notEqual(withImpl, builds['Application debug'], 'the test should rewrite the key definition')
+    assert.ok(inject(withImpl).includes(navigationKeyTag))
+  })
 
   it('refuses an application whose navigation key it cannot find', () => {
     const withoutKey = builds['Application debug'].replace(/var key = function\s*\(\)\s*\{[^}]*\};/u, '')

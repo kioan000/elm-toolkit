@@ -53,6 +53,12 @@ The runtime in `hot/runtime.js` is the one from `elm-hot`, under its MIT
 license. It is injected as text into the compiled Elm code, so it is not linted
 or formatted with the rest of the repository.
 
+An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
+reloads itself: a development build offers `Elm.hot.reload()`. When that is
+there, the hot loader passes each new version of the code to it, and the elm-hot
+runtime stays off. Otherwise the elm-hot runtime does the work, as before. The
+patched kernel comes from `@elm-toolkit/webpack-elm-kernel-patcher-plugin`.
+
 ## Compatibility
 
 Both loaders work with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
