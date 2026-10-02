@@ -11,10 +11,28 @@
  * @packageDocumentation
  */
 
-import { createReadStream, existsSync, readFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import * as path from 'node:path'
 
-const sourceDirectoriesCache = new Map<string, ReadonlyArray<string>>()
+/**
+ * The `elm.json` that lists a source directory, and the source directories it
+ * lists.
+ */
+type ElmJsonMatch = {
+  elmJsonPath: string
+  sourceDirectories: ReadonlyArray<string>
+}
+
+/**
+ * A cached match, with the modification time and the size that `elm.json` had
+ * when it was read.
+ */
+type CachedElmJsonMatch = ElmJsonMatch & {
+  modifiedAt: number
+  size: number
+}
+
+const sourceDirectoriesCache = new Map<string, CachedElmJsonMatch>()
 
 /**
  * Reads imports from a given Elm file asynchronously.
@@ -100,7 +118,8 @@ class Parser {
       } else if (line.indexOf(' ') === 0 || line.trim().length === 0 || line.startsWith('--')) {
         // Ignore lines starting with whitespace, empty lines, and comments
       } else if (line.startsWith('{-')) {
-        this.isInComment = true
+        // A block comment that closes on the same line leaves nothing open.
+        this.isInComment = !line.trimEnd().endsWith('-}')
       } else {
         // End of imports reached
         this.parsingDone = true
@@ -241,9 +260,9 @@ function isRoot(dir: string): boolean {
  *
  * @param baseDir - Base directory to start searching from
  * @param currentDir - Current directory being checked (defaults to baseDir)
- * @returns Array of source directories
+ * @returns The elm.json that lists baseDir and its source directories, or undefined when none does
  */
-function getElmPackageSourceDirectories(baseDir: string, currentDir?: string): ReadonlyArray<string> {
+function getElmPackageSourceDirectories(baseDir: string, currentDir?: string): ElmJsonMatch | undefined {
   if (!currentDir) {
     baseDir = path.resolve(baseDir)
     currentDir = baseDir
@@ -255,12 +274,12 @@ function getElmPackageSourceDirectories(baseDir: string, currentDir?: string): R
     const sourceDirectories = getSourceDirectories(elmPackagePath)
 
     if (sourceDirectories.includes(baseDir)) {
-      return sourceDirectories
+      return { elmJsonPath: elmPackagePath, sourceDirectories }
     }
   }
 
   if (isRoot(currentDir)) {
-    return []
+    return undefined
   }
 
   return getElmPackageSourceDirectories(baseDir, path.dirname(currentDir))
@@ -364,7 +383,12 @@ async function findAllDependenciesHelp(
 }
 
 /**
- * Get source-directories for a base dir using in-memory cache.
+ * Get source-directories for a base dir, reading elm.json only when it changed.
+ *
+ * A webpack process in watch mode lives for a whole session, and elm.json can
+ * change during it, so a cached entry counts only while its elm.json keeps the
+ * same modification time and size. A search that finds no elm.json is not
+ * cached, so a file created later is found at once.
  *
  * @param baseDir - Base source directory for the requested Elm entrypoint
  * @returns Cached or freshly discovered source-directories
@@ -373,14 +397,36 @@ function getCachedElmPackageSourceDirectories(baseDir: string): ReadonlyArray<st
   const resolvedBaseDir = path.resolve(baseDir)
   const cached = sourceDirectoriesCache.get(resolvedBaseDir)
 
-  if (cached) {
-    return cached
+  if (cached && isUnchanged(cached)) {
+    return cached.sourceDirectories
   }
 
-  const sourceDirectories = getElmPackageSourceDirectories(resolvedBaseDir)
-  sourceDirectoriesCache.set(resolvedBaseDir, sourceDirectories)
+  const match = getElmPackageSourceDirectories(resolvedBaseDir)
 
-  return sourceDirectories
+  if (!match) {
+    sourceDirectoriesCache.delete(resolvedBaseDir)
+
+    return []
+  }
+
+  const { mtimeMs, size } = statSync(match.elmJsonPath)
+
+  sourceDirectoriesCache.set(resolvedBaseDir, { ...match, modifiedAt: mtimeMs, size })
+
+  return match.sourceDirectories
+}
+
+/**
+ * Check whether a cached elm.json still has the modification time and the size
+ * it had when it was read.
+ *
+ * @param cached - Cached match to check
+ * @returns True if the file is still there and looks unchanged
+ */
+function isUnchanged(cached: CachedElmJsonMatch): boolean {
+  const stats = statSync(cached.elmJsonPath, { throwIfNoEntry: false })
+
+  return stats !== undefined && stats.mtimeMs === cached.modifiedAt && stats.size === cached.size
 }
 
 /**

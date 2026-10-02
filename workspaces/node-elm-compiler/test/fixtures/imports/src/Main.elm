@@ -12,6 +12,8 @@ import Ui.Button
         , secondary
         )
 import Ui.Icon
+{- A block comment that closes on the line where it opens. -}
+import Ui.Badge
 
 
 main : Html msg
