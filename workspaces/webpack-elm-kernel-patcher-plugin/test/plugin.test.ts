@@ -32,11 +32,12 @@ let printed: ReturnType<typeof mock.method>
  * Writes an `elm.json` that pins the given versions as direct dependencies.
  *
  * @param versions - the package names mapped to the versions to pin
+ * @param elmVersion - the version of Elm that the project declares
  */
-function writeElmJson(versions: Record<string, string>): void {
+function writeElmJson(versions: Record<string, string>, elmVersion = '0.19.1'): void {
   const elmJson = {
     dependencies: { direct: versions, indirect: {} },
-    'elm-version': '0.19.1',
+    'elm-version': elmVersion,
     'source-directories': ['src'],
     'test-dependencies': { direct: {}, indirect: {} },
     type: 'application',
@@ -116,6 +117,17 @@ describe('ElmKernelReplacementPlugin', () => {
       printed.mock.calls.some((call) => String(call.arguments[0]).includes('ERROR:[ElmKernelReplacementPlugin]')),
       'the plugin should print its own failure message'
     )
+  })
+
+  it('stops webpack when the project is not an Elm 0.19.1 project', () => {
+    writeElmJson(patchedVersions, '0.19.2')
+
+    assert.throws(
+      () => createCompiler(new ElmKernelReplacementPlugin({ elmJsonFolder: project, isEnabled: true })),
+      /The patches are for Elm 0\.19\.1, but elm\.json declares 0\.19\.2/
+    )
+    assert.equal(existsSync(path.join(elmHome, '0.19.1')), false, 'nothing should be copied')
+    assert.equal(existsSync(prepareArgs(true).PATCH_DIR), false, 'nothing should be extracted')
   })
 
   it('stops webpack when there is no elm.json', () => {

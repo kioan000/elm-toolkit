@@ -48,7 +48,10 @@ the current working directory.
 
 ## What it does
 
-The tool reads the direct and indirect dependencies from `elm.json`. For every
+The tool first checks that `elm.json` declares Elm 0.19.1, and stops otherwise,
+because the patches and the folders it writes belong to that version.
+
+Then it reads the direct and indirect dependencies from `elm.json`. For every
 patched package it finds, it checks that the version matches the pinned one and
 stops if it does not.
 

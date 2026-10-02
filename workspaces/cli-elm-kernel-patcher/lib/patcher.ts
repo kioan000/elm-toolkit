@@ -81,7 +81,9 @@ export type ReplaceKernelArgs = {
  *
  * The function refuses to run when a patched package does not carry the version
  * that `elm.json` pins, because a mismatch would silently corrupt the shared Elm
- * home. It also stops when a patched package holds more than one version.
+ * home. It also stops when a patched package holds more than one version, and
+ * when the project is not an Elm 0.19.1 project, because the patches and the
+ * folders it writes belong to that version.
  *
  * Repeated runs are cheap. Each patched package records where its code came from,
  * and a run that finds the same record already in place skips the copy.
@@ -94,8 +96,9 @@ export type ReplaceKernelArgs = {
  * ```
  *
  * @param args - the resolved paths and options from `prepareArgs`
- * @throws Error when `elm.json` cannot be read, when a version does not match the
- * pinned one, or when a patched package holds more than one version
+ * @throws Error when `elm.json` cannot be read, when it does not declare Elm
+ * 0.19.1, when a version does not match the pinned one, or when a patched package
+ * holds more than one version
  */
 export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   prettyInfo('> Running:', 'Elm Kernel Replacement script with given params')
@@ -108,6 +111,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   } catch (error) {
     throw new Error(`Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `)
   }
+  assertElmVersion(path.join(args.PROJECT_ELM_ROOT, 'elm.json'))
   if (args.USE_ARCHIVE) {
     prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCH_ARCHIVE)
     childProcess.execFileSync('tar', ['-xzf', args.PATCH_ARCHIVE, '-C', args.CURRENT])
@@ -203,6 +207,23 @@ function applyPatches(args: ReplaceKernelArgs, elmJsonDependencies: Record<strin
     // Force Elm to recompile everything:
     prettyInfo('> Running: ', 'Invalidate cache fingerprint for: ', args.PROJECT_ELM_STUFF)
     fs.rmSync(args.PROJECT_ELM_STUFF, { force: true, recursive: true })
+  }
+}
+
+/**
+ * Stops a run on a project that is not an Elm 0.19.1 application. The patches,
+ * the package folder in `ELM_HOME` and the `elm-stuff` folder that a run clears
+ * all belong to Elm 0.19.1; on another version a run would report success and
+ * change nothing that the compiler reads.
+ *
+ * @param elmJsonPath - path to the project's `elm.json`
+ * @throws Error when `elm-version` is not exactly `0.19.1`
+ */
+function assertElmVersion(elmJsonPath: string): void {
+  const elmVersion: unknown = JSON.parse(fs.readFileSync(elmJsonPath, 'utf-8'))['elm-version']
+
+  if (elmVersion !== '0.19.1') {
+    throw new Error(`The patches are for Elm 0.19.1, but elm.json declares ${String(elmVersion)}.`)
   }
 }
 
