@@ -148,6 +148,15 @@ describe('compile', () => {
     assert.equal(received?.options.env?.PATH, process.env.PATH, 'the current environment should be kept')
   })
 
+  it('throws an Error, with the plain message, for an option it does not know', () => {
+    for (const run of [compile, compileSync]) {
+      assert.throws(
+        () => run(source('Main'), { ...inApp, forceWatch: true }),
+        (thrown) => thrown instanceof Error && thrown.message.startsWith('node-elm-compiler was given an unrecognized')
+      )
+    }
+  })
+
   it('reports a missing binary as an error event instead of crashing the process', async () => {
     const result = await settle(compile('src/Main.elm', { pathToElm: missingElm, processOpts: { stdio: 'pipe' } }))
 

@@ -189,7 +189,7 @@ export function compile(sources: Sources, options: CompilerOptions): ChildProces
       }
     }) as ChildProcess
   } catch (err: unknown) {
-    throw compilerErrorToString(err, pathToElm)
+    throw startErrorOrOwnError(err, pathToElm)
   }
 }
 
@@ -218,7 +218,7 @@ export function compileSync(sources: Sources, options: CompilerOptions): SyncCom
   try {
     return runCompiler(sources, optionsWithDefaults, pathToElm) as SyncCompilerResult
   } catch (err: unknown) {
-    throw compilerErrorToString(err, pathToElm)
+    throw startErrorOrOwnError(err, pathToElm)
   }
 }
 
@@ -486,6 +486,23 @@ function compilerErrorToString(err: unknown, pathToElm: string): string {
   }
 
   return `Exception thrown when attempting to run Elm compiler ${JSON.stringify(pathToElm)}`
+}
+
+/**
+ * Choose what to throw when the compiler could not be started. An `Error` that
+ * this module raised itself, such as one for an unknown option, is thrown as it
+ * is; a failure of the process start becomes the legacy message string.
+ *
+ * @param err - what was thrown while starting the compiler
+ * @param pathToElm - executable that was being launched
+ * @returns the value to throw
+ */
+function startErrorOrOwnError(err: unknown, pathToElm: string): unknown {
+  if (err instanceof Error && !('code' in err)) {
+    return err
+  }
+
+  return compilerErrorToString(err, pathToElm)
 }
 
 /**
