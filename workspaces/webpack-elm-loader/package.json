@@ -2,7 +2,7 @@
   "author": "kioan000",
   "type": "module",
   "name": "@elm-toolkit/webpack-elm-loader",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Webpack loaders that compile Elm modules and reload them in place during development",
   "license": "BSD-3-Clause",
   "main": "./dist/index.js",

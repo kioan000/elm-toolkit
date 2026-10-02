@@ -2,7 +2,7 @@
   "author": "kioan000",
   "type": "module",
   "name": "@elm-toolkit/node-elm-compiler",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Runs the Elm compiler from Node and finds the modules an Elm file depends on",
   "license": "BSD-3-Clause",
   "main": "./dist/index.js",
