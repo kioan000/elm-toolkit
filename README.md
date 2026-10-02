@@ -1,4 +1,4 @@
-# elm-toolkit
+# 🧰 elm-toolkit
 
 A small, opinionated collection of tools for [Elm](https://elm-lang.org/) developers
 who live in a Node + TypeScript world.
