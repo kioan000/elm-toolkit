@@ -49,8 +49,15 @@ the current working directory.
 
 ## What it does
 
-The tool first checks that `elm.json` declares Elm 0.19.1, and stops otherwise,
-because the patches and the folders it writes belong to that version.
+The tool first reads `elm-version` from `elm.json` and checks it against the
+versions the patches support, Elm 0.19.1 and 0.19.2. It stops on any other
+version before it changes anything. Elm keeps its packages and its cache in
+folders named after the version, so the version also decides where the tool
+writes.
+
+A new Elm version is supported by adding it to that list in `lib/patcher.ts`,
+together with the patch archive it needs. Today both versions use the same
+archive.
 
 Then it reads the direct and indirect dependencies from `elm.json`. For every
 patched package it finds, it checks that the version matches the pinned one and
@@ -62,7 +69,7 @@ tool decides whether the patch still needs to be applied, so repeated runs are
 cheap.
 
 When something is out of date, the patched packages are copied into `ELM_HOME`
-and the project's `elm-stuff/0.19.1` folder is removed, which forces Elm to
+and the project's `elm-stuff/<version>` folder is removed, which forces Elm to
 compile again from the new sources.
 
 ## Using it as a library
@@ -78,7 +85,7 @@ replaceKernelPackages(prepareArgs(true))
 
 ## Requirements
 
-Node 24, an Elm 0.19.1 project with a valid `elm.json`, and `tar` on the `PATH`
+Node 24, an Elm 0.19.1 or 0.19.2 project with a valid `elm.json`, and `tar` on the `PATH`
 when the archive mode is used.
 
 The package installs one executable, which runs the compiled JavaScript in
