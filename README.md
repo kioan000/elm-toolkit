@@ -102,8 +102,8 @@ Several packages here continue the work of other people, and they are credited
 in the README of each package. In short: Richard Feldman for `node-elm-compiler`,
 `find-elm-dependencies` and `elm-webpack-loader`; the elm-community organization
 for maintaining `elm-webpack-loader`; Keith Lazuka for `elm-hot`; Flux Xu for
-`elm-hot-loader`; Simon Lydell for the patched kernel packages and the script
-that applies them; and Evan Czaplicki for Elm itself. Thank you all, and thank
+`elm-hot-loader`; Joakin for `elm-node`; Simon Lydell for the patched kernel
+packages and the script that applies them; and Evan Czaplicki for Elm itself. Thank you all, and thank
 you to every contributor of those projects.
 
 ## License

@@ -25,6 +25,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@elm-toolkit/elm-node-runner@workspace:workspaces/elm-node-runner":
+  version: 0.0.0-use.local
+  resolution: "@elm-toolkit/elm-node-runner@workspace:workspaces/elm-node-runner"
+  dependencies:
+    "@elm-toolkit/cli-lib": "workspace:^"
+    "@elm-toolkit/node-elm-compiler": "workspace:^"
+    elm: "npm:^0.19.2-0"
+    typescript: "npm:^6.0.3"
+  bin:
+    elm-node-runner: ./dist/command.js
+  languageName: unknown
+  linkType: soft
+
 "@elm-toolkit/integration-tests@workspace:workspaces/integration-tests":
   version: 0.0.0-use.local
   resolution: "@elm-toolkit/integration-tests@workspace:workspaces/integration-tests"

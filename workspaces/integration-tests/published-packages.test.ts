@@ -25,6 +25,7 @@ const workspaces = [
   '@elm-toolkit/node-elm-compiler',
   '@elm-toolkit/webpack-elm-loader',
   '@elm-toolkit/webpack-elm-kernel-patcher-plugin',
+  '@elm-toolkit/elm-node-runner',
 ]
 
 let consumer: string
@@ -87,6 +88,7 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     // These packages contain code under the licenses of other authors, which must travel with it.
     const derived = [
       '@elm-toolkit/cli-elm-kernel-patcher',
+      '@elm-toolkit/elm-node-runner',
       '@elm-toolkit/node-elm-compiler',
       '@elm-toolkit/webpack-elm-loader',
     ]
@@ -164,6 +166,22 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     `)
 
     assert.equal(exported, 'function function')
+  })
+
+  it('installs a runner executable that prints its examples', () => {
+    const example = run(path.join(consumer, 'node_modules/.bin/elm-node-runner'), ['--example-elm'], consumer)
+
+    assert.match(example, /^port module Main exposing \(main\)/)
+  })
+
+  it('does not run the runner when the package is imported', () => {
+    const exported = runInConsumer(`
+      const runner = await import('@elm-toolkit/elm-node-runner')
+      const library = await import('@elm-toolkit/elm-node-runner/runner')
+      console.log(typeof runner.main, Object.keys(library).sort().join(','))
+    `)
+
+    assert.equal(exported, 'function compileProgram,runElm,startMain')
   })
 
   it('ships the hot reload runtime that the hot loader reads', () => {

@@ -1,0 +1,48 @@
+{
+  "author": "kioan000",
+  "type": "module",
+  "name": "@elm-toolkit/elm-node-runner",
+  "version": "0.0.1",
+  "description": "Compiles Elm modules and runs them in Node, with or without a launcher of your own",
+  "license": "BSD-3-Clause",
+  "main": "./dist/command.js",
+  "types": "./dist/command.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/command.d.ts",
+      "default": "./dist/command.js"
+    },
+    "./runner": {
+      "types": "./dist/lib/runner.d.ts",
+      "default": "./dist/lib/runner.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": "./dist/command.js",
+  "files": [
+    "dist",
+    "command.ts",
+    "lib/examples.ts",
+    "lib/runner.ts",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "engines": {
+    "node": ">= 24.15.0 < 25",
+    "npm": ">= 11.4.1 <12"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@elm-toolkit/cli-lib": "workspace:^",
+    "@elm-toolkit/node-elm-compiler": "workspace:^"
+  },
+  "devDependencies": {
+    "elm": "^0.19.2-0",
+    "typescript": "^6.0.3"
+  }
+}
