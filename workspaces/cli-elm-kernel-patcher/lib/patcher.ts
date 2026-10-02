@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import { prettyInfo } from '@elm-toolkit/cli-lib'
+import { prettyError, prettyInfo } from '@elm-toolkit/cli-lib'
 import path from 'node:path'
 import fs from 'node:fs'
 import * as os from 'node:os'
@@ -91,16 +91,38 @@ function readElmVersion(elmJsonPath: string): string {
   try {
     elmVersion = JSON.parse(fs.readFileSync(elmJsonPath, 'utf-8'))['elm-version']
   } catch (error) {
-    throw new Error(`Failed to read elm.json: ${error instanceof Error ? error.message : String(error)}`)
+    const cause = error instanceof Error ? error.message : String(error)
+
+    prettyError('elm.json reading', 'the Elm version of the project could not be read')
+    console.info(indent(`file: ${elmJsonPath}\ncause: ${cause}`))
+
+    throw new Error(`Failed to read elm.json: ${cause}`)
   }
 
   if (typeof elmVersion !== 'string' || !Object.hasOwn(patchArchives, elmVersion)) {
-    throw new Error(
-      `The patches support Elm ${Object.keys(patchArchives).join(' and ')}, but elm.json declares ${String(elmVersion)}.`
-    )
+    const supported = Object.keys(patchArchives)
+
+    prettyError('elm version checking', 'the project uses a version that the patches do not support')
+    console.info(indent(`file: ${elmJsonPath}\nelm-version: ${String(elmVersion)}\nsupported: ${supported.join(', ')}`))
+
+    throw new Error(`The patches support Elm ${supported.join(' and ')}, but elm.json declares ${String(elmVersion)}.`)
   }
 
   return elmVersion
+}
+
+/**
+ * Indents every line of a detail, so that it reads as part of the message
+ * printed above it.
+ *
+ * @param text - the detail, on one or more lines
+ * @returns the same text with each line indented
+ */
+function indent(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n')
 }
 
 /**
