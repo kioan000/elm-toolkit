@@ -20,6 +20,16 @@ package includes a `source.txt` file that records the exact upstream commit its
 code was taken from, so the origin of any file can always be traced from the
 patch itself rather than from this document.
 
+The way the patches are applied comes from lydell too. The patching routine
+follows `replace-kernel-packages.mjs`, the script that he publishes with
+[elm-safe-virtual-dom](https://github.com/lydell/elm-safe-virtual-dom), together
+with a long and careful explanation of how Elm uses `ELM_HOME`. Thank you,
+Simon, for the forks, the script, and the explanation.
+
+The forks are based on the `elm/virtual-dom`, `elm/browser` and `elm/html`
+packages by Evan Czaplicki, and they keep his license. The license texts are
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Usage
 
 ```sh
@@ -78,3 +88,8 @@ corepack yarn workspace @elm-toolkit/cli-elm-kernel-patcher dev --help
 
 In a fresh clone the executable is linked only after the second install. The
 root README explains why.
+
+## License
+
+BSD-3-Clause, copyright kioan000. The patched Elm packages keep the notices of
+their authors, in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

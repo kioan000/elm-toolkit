@@ -67,3 +67,7 @@ because the answer is about the calling module and not about this library.
 
 Node 24. The package is compiled to `dist/` and published as JavaScript. The
 TypeScript sources are published as well, to support the source maps.
+
+## License
+
+BSD-3-Clause, copyright kioan000.

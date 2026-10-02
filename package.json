@@ -1,6 +1,7 @@
 {
   "author": "kioan000",
   "description": "Monorepo workspace for some utilities around elm tooling",
+  "license": "BSD-3-Clause",
   "devDependencies": {
     "@eslint/compat": "^2.0.5",
     "@eslint/js": "^10.0.1",

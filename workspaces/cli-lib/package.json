@@ -4,6 +4,7 @@
   "type": "module",
   "version": "0.0.1",
   "description": "CLI common utilities library",
+  "license": "BSD-3-Clause",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

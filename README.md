@@ -96,6 +96,22 @@ Keys in an `exports` map are conditions, not free labels. A key that Node does
 not know resolves to nothing and reports no error, so subpaths belong on the
 left side of the map and `types` and `default` on the right.
 
+## Thanks
+
+Several packages here continue the work of other people, and they are credited
+in the README of each package. In short: Richard Feldman for `node-elm-compiler`,
+`find-elm-dependencies` and `elm-webpack-loader`; the elm-community organization
+for maintaining `elm-webpack-loader`; Keith Lazuka for `elm-hot`; Flux Xu for
+`elm-hot-loader`; Simon Lydell for the patched kernel packages and the script
+that applies them; and Evan Czaplicki for Elm itself. Thank you all, and thank
+you to every contributor of those projects.
+
+## License
+
+BSD-3-Clause, copyright kioan000. See [LICENSE](LICENSE). Packages that contain
+code from other projects also ship a `THIRD_PARTY_NOTICES.md` file with the
+licenses of that code.
+
 ## Contributing
 
 Repository conventions, including how documentation and comments are written,

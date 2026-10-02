@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, describe, it } from 'node:test'
@@ -71,6 +71,31 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
 
   after(() => {
     rmSync(consumer, { force: true, recursive: true })
+  })
+
+  it('ships the license with every package', () => {
+    for (const workspace of workspaces) {
+      const installed = path.join(consumer, 'node_modules', workspace)
+      const manifest = JSON.parse(readFileSync(path.join(installed, 'package.json'), 'utf8'))
+
+      assert.equal(manifest.license, 'BSD-3-Clause', `${workspace} should declare its license`)
+      assert.ok(existsSync(path.join(installed, 'LICENSE')), `${workspace} should contain LICENSE`)
+    }
+  })
+
+  it('ships the notices of the projects that some packages come from', () => {
+    // These packages contain code under the licenses of other authors, which must travel with it.
+    const derived = [
+      '@elm-toolkit/cli-elm-kernel-patcher',
+      '@elm-toolkit/node-elm-compiler',
+      '@elm-toolkit/webpack-elm-loader',
+    ]
+
+    for (const workspace of derived) {
+      const notices = path.join(consumer, 'node_modules', workspace, 'THIRD_PARTY_NOTICES.md')
+
+      assert.ok(existsSync(notices), `${workspace} should contain THIRD_PARTY_NOTICES.md`)
+    }
   })
 
   it('installs an executable that runs', () => {

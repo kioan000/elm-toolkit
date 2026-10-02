@@ -4,6 +4,7 @@
   "name": "@elm-toolkit/cli-elm-kernel-patcher",
   "version": "0.0.1",
   "description": "CLI script for patch elm library",
+  "license": "BSD-3-Clause",
   "main": "./dist/command.js",
   "types": "./dist/command.d.ts",
   "exports": {
@@ -23,7 +24,8 @@
     "command.ts",
     "lib/patcher.ts",
     "lib/patches.tar.gz",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">= 24.15.0 < 25",
