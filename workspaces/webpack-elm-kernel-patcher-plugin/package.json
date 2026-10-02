@@ -2,7 +2,7 @@
   "author": "kioan000",
   "type": "module",
   "name": "@elm-toolkit/webpack-elm-kernel-patcher-plugin",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Webpack plugin that patches the Elm kernel packages before the first compilation",
   "license": "BSD-3-Clause",
   "main": "./dist/index.js",
