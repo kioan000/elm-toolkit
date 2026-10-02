@@ -2,7 +2,7 @@
   "author": "kioan000",
   "type": "module",
   "name": "@elm-toolkit/cli-elm-kernel-patcher",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "CLI script for patch elm library",
   "license": "BSD-3-Clause",
   "main": "./dist/command.js",

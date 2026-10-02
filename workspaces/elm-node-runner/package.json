@@ -2,7 +2,7 @@
   "author": "kioan000",
   "type": "module",
   "name": "@elm-toolkit/elm-node-runner",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Compiles Elm modules and runs them in Node, with or without a launcher of your own",
   "license": "BSD-3-Clause",
   "main": "./dist/command.js",

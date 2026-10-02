@@ -20,7 +20,7 @@ version. Point the dependency at the URL of the archive:
 ```json
 {
   "dependencies": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.1/elm-toolkit-node-elm-compiler-0.1.0-alpha.1.tgz"
   }
 }
 ```
@@ -37,11 +37,11 @@ registry, so it also needs them in `resolutions`:
 ```json
 {
   "dependencies": {
-    "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-webpack-elm-loader-0.1.0.tgz",
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+    "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.1/elm-toolkit-webpack-elm-loader-0.1.0-alpha.1.tgz",
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.1/elm-toolkit-node-elm-compiler-0.1.0-alpha.1.tgz"
   },
   "resolutions": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.1/elm-toolkit-node-elm-compiler-0.1.0-alpha.1.tgz"
   }
 }
 ```
@@ -143,6 +143,10 @@ git tag v0.2.0 && git push origin v0.2.0
 
 The release workflow runs the same checks as a pull request, packs every public
 workspace, and publishes a GitHub release with the archives.
+
+A version with a hyphen, such as `0.1.0-alpha.1`, is a pre-release. Give the
+manifests and the tag the same version, `v0.1.0-alpha.1` in that case, and
+GitHub marks the release as a pre-release.
 
 ## Thanks
 
