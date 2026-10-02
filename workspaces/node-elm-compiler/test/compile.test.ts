@@ -213,6 +213,14 @@ describe('compileToString', () => {
     await assert.rejects(compileToString(source('Broken'), inApp), /TYPE MISMATCH/)
   })
 
+  it('removes its temporary directory when the build fails', async () => {
+    const before = temporaryDirectories()
+
+    await assert.rejects(compileToString(source('Broken'), inApp))
+
+    assert.deepEqual(temporaryDirectories(), before)
+  })
+
   it('passes the report format to the compiler', async () => {
     await assert.rejects(compileToString(source('Broken'), { ...inApp, report: 'json' }), (error: Error) => {
       const report = JSON.parse(error.message.slice(error.message.indexOf('{')))
@@ -294,12 +302,23 @@ describe('compileWorker', () => {
     assert.equal(await answer, 42)
   })
 
-  it('restores the working directory afterwards', async () => {
+  it('leaves the working directory of the process unchanged, and removes its temporary directory', async () => {
     const before = process.cwd()
+    const directoriesBefore = temporaryDirectories()
+    let cwdDuringCompile = before
+    const watcher = setInterval(() => {
+      cwdDuringCompile = process.cwd() === before ? cwdDuringCompile : process.cwd()
+    }, 1)
 
-    await startWorker('Doubler', 'Doubler', { flags: 3 })
+    try {
+      await startWorker('Doubler', 'Doubler', { flags: 3 })
+    } finally {
+      clearInterval(watcher)
+    }
 
+    assert.equal(cwdDuringCompile, before, 'the working directory should not change while the compiler runs')
     assert.equal(process.cwd(), before)
+    assert.deepEqual(temporaryDirectories(), directoriesBefore)
   })
 
   it('suggests the module that exists when the name is wrong', async () => {

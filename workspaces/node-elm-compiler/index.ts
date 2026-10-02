@@ -20,7 +20,7 @@
  */
 
 import { type ChildProcess, type SpawnOptions, type SpawnSyncReturns, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -245,25 +245,25 @@ export async function compileToString(sources: Sources, options: CompilerOptions
   const suffix = getSuffix(options.output, '.js')
   const tempFilePath = makeTempOutputPathSync(suffix)
 
-  const compiler = compile(sources, {
-    ...options,
-    output: tempFilePath,
-    processOpts: { stdio: 'pipe' },
-  })
-
-  assertReadableStream(compiler.stdout)
-  assertReadableStream(compiler.stderr)
-
-  compiler.stdout.setEncoding('utf8')
-  compiler.stderr.setEncoding('utf8')
-
-  const output = await collectCompilerOutput(compiler)
-
-  if (options.verbose) {
-    console.log(output)
-  }
-
   try {
+    const compiler = compile(sources, {
+      ...options,
+      output: tempFilePath,
+      processOpts: { stdio: 'pipe' },
+    })
+
+    assertReadableStream(compiler.stdout)
+    assertReadableStream(compiler.stderr)
+
+    compiler.stdout.setEncoding('utf8')
+    compiler.stderr.setEncoding('utf8')
+
+    const output = await collectCompilerOutput(compiler)
+
+    if (options.verbose) {
+      console.log(output)
+    }
+
     return await readFile(tempFilePath, { encoding: 'utf8' })
   } finally {
     await cleanupTempFile(tempFilePath)
@@ -308,9 +308,9 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  * Use it for build steps and command line tools written in Elm, which exchange
  * data with Node through ports.
  *
- * The process changes its working directory to `projectRootDir` during the
- * compilation, so `elm.json` is found there, and returns to the original
- * directory afterwards.
+ * The compiler runs in `projectRootDir`, so `elm.json` is found there. The
+ * working directory of the current process does not change, and the compiled
+ * code is removed once the worker has started.
  *
  * @example
  *
@@ -574,14 +574,14 @@ function makeCompileWorker(
     moduleName: string,
     workerArgs: unknown
   ): Promise<WorkerWithPorts> {
-    const originalWorkingDir = process.cwd()
-    process.chdir(projectRootDir)
+    const tmpDirPath = await createTmpDir()
 
+    // The compiler gets the project as its own working directory, so the process never changes
+    // directory, and two workers can compile at the same time.
     try {
-      const tmpDirPath = await createTmpDir()
       const destination = path.join(tmpDirPath, jsEmitterFilename)
 
-      await compileEmitter(compileFn, modulePath, { output: destination })
+      await compileEmitter(compileFn, modulePath, { cwd: projectRootDir, output: destination })
 
       return await runWorker(destination, moduleName, workerArgs)
     } catch (err: unknown) {
@@ -590,7 +590,7 @@ function makeCompileWorker(
 
       throw wrappedError
     } finally {
-      process.chdir(originalWorkingDir)
+      await rm(tmpDirPath, { force: true, recursive: true })
     }
   }
 }
@@ -775,12 +775,12 @@ async function cleanupTempFile(filePath: string): Promise<void> {
 }
 
 /**
- * Remove a temp file and its parent directory synchronously via fire-and-forget.
+ * Remove a temp file and its parent directory before returning.
  *
  * @param filePath - file path to clean up
  */
 function cleanupTempFileSync(filePath: string): void {
-  rm(path.dirname(filePath), { force: true, recursive: true }).catch((): void => undefined)
+  rmSync(path.dirname(filePath), { force: true, recursive: true })
 }
 
 /**
