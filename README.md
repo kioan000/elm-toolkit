@@ -7,8 +7,11 @@ The guiding principle is **minimal dependencies**: every package here aims for
 the smallest possible footprint, leaning on the standard library and native
 Node features whenever possible.
 
-Each workspace under `workspaces/` is published as its own package and has its
-own README.
+Each workspace under `workspaces/` is a package of its own, with its own README.
+The packages are not on the npm registry yet. To try one in another project,
+pack it and install the archive, as
+[Checking a package before you trust it](#checking-a-package-before-you-trust-it)
+shows.
 
 ## Requirements
 
