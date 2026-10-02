@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-const workspaces = ['@elm-toolkit/cli-lib', '@elm-toolkit/cli-elm-kernel-patcher']
+const workspaces = ['@elm-toolkit/cli-lib', '@elm-toolkit/cli-elm-kernel-patcher', '@elm-toolkit/node-elm-compiler']
 
 let consumer: string
 
@@ -102,5 +102,17 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     `)
 
     assert.equal(exported, 'function function')
+  })
+
+  it('exposes the compiler wrapper', () => {
+    const exported = runInConsumer(`
+      const compiler = await import('@elm-toolkit/node-elm-compiler')
+      console.log(Object.keys(compiler).sort().join(','))
+    `)
+
+    assert.equal(
+      exported,
+      '_prepareProcessArgs,compile,compileSync,compileToString,compileToStringSync,compileWorker,findAllDependencies'
+    )
   })
 })

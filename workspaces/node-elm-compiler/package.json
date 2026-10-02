@@ -1,0 +1,37 @@
+{
+  "author": "kioan000",
+  "type": "module",
+  "name": "@elm-toolkit/node-elm-compiler",
+  "version": "0.0.1",
+  "description": "Runs the Elm compiler from Node and finds the modules an Elm file depends on",
+  "license": "BSD-3-Clause",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.ts",
+    "find-elm-dependencies.ts",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "engines": {
+    "node": ">= 24.15.0 < 25",
+    "npm": ">= 11.4.1 <12"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "elm": "^0.19.2-0",
+    "typescript": "^6.0.3"
+  }
+}

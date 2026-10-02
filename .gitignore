@@ -158,6 +158,9 @@ web_modules/
 # Output of 'npm pack'
 *.tgz
 
+# Elm compiler cache, created next to each elm.json the tests compile
+elm-stuff/
+
 # Yarn Integrity file
 .yarn-integrity
 
