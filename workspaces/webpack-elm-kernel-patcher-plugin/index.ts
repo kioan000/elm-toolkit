@@ -10,37 +10,67 @@
  * @packageDocumentation
  */
 
+import path from 'node:path'
+
 import type { Compiler } from 'webpack'
 import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
 import { prettyError, prettyInfo } from '@elm-toolkit/cli-lib'
 
-const PLUGIN_NAME = 'ElmKernelReplacementPlugin'
+const PLUGIN_NAME = 'ElmKernelPatcherPlugin'
 
 /**
- * Configures the plugin. Only `isEnabled` is required; the other fields keep the
- * defaults of the command line tool.
+ * Where the patched packages go. `'default'` keeps the `ELM_HOME` of the
+ * environment, or `~/.elm` without one, which every Elm project on the machine
+ * shares. Any other value is a folder of its own, relative to the folder that
+ * holds `elm.json`.
  *
  * @example
  *
- * Patch only in development, with the project in a subfolder
+ * Keep the patched packages inside the project
  * ```TypeScript
- *   const options: ElmKernelReplacementPluginOptions = {
- *     elmJsonFolder: path.join(import.meta.dirname, 'frontend'),
- *     isEnabled: mode === 'development',
+ *   const elmHome: ElmHome = 'elm-home/elm-stuff'
+ * ```
+ */
+export type ElmHome = 'default' | (string & {})
+
+/**
+ * Configures the plugin.
+ *
+ * `isEnabled` is a boolean, or a function that receives the webpack compiler
+ * and decides when webpack starts. Unless it is `false`, `elmHome` is required:
+ * the patched packages stay in that folder, so the choice has to be explicit.
+ *
+ * @example
+ *
+ * Patch only in development builds, into a folder of the project
+ * ```TypeScript
+ *   const options: ElmKernelPatcherPluginOptions = {
+ *     elmHome: 'elm-home/elm-stuff',
+ *     isEnabled: (compiler) => compiler.options.mode === 'development',
  *   }
  * ```
  */
-export type ElmKernelReplacementPluginOptions = {
+export type ElmKernelPatcherPluginOptions = {
   /**
    * The folder that holds `elm.json`. It defaults to `INIT_CWD`, which npm and
    * yarn set when they run a script, and then to the current directory.
    */
   elmJsonFolder?: string
-  /** Enables or disables the plugin. When false the plugin is a no-op. */
-  isEnabled: boolean
   /** Whether to extract patches from the archive (default: true). */
   useArchive?: boolean
-}
+} & (
+  | {
+      elmHome?: ElmHome
+      /** The plugin does nothing. */
+      isEnabled: false
+    }
+  | {
+      /** Where the patched packages go; see `ElmHome`. */
+      elmHome: ElmHome
+      /** Enables the plugin, or decides when webpack starts. */
+      isEnabled: boolean | ((compiler: Compiler) => boolean)
+    }
+)
 
 /**
  * Webpack 5 plugin that patches Elm kernel packages **before** compilation starts.
@@ -48,9 +78,12 @@ export type ElmKernelReplacementPluginOptions = {
  * It hooks into `initialize` so that the patched packages are
  * already in place when `elm-webpack-loader` invokes the Elm compiler.
  *
- * Internally it calls the `replaceKernelPackages` function exported by the
- * `elm-kernel-replacement` CLI module directly in-process, avoiding the
+ * Internally it calls the `replaceKernelPackages` function exported by
+ * `@elm-toolkit/cli-elm-kernel-patcher` directly in-process, avoiding the
  * overhead of spawning a child process on every recompilation.
+ *
+ * With a folder as `elmHome`, the plugin also sets `ELM_HOME` for the whole
+ * webpack process, so the Elm loader compiles against the same patched packages.
  *
  * When patching fails, for example because `elm.json` pins a version that the
  * patches do not cover, the plugin prints a short message and throws the error,
@@ -61,26 +94,21 @@ export type ElmKernelReplacementPluginOptions = {
  * Patch the kernel before webpack compiles any Elm module
  * ```TypeScript
  *   export default {
- *     plugins: [new ElmKernelReplacementPlugin({ isEnabled: true })],
+ *     plugins: [new ElmKernelPatcherPlugin({ isEnabled: true, elmHome: 'elm-home/elm-stuff' })],
  *   }
  * ```
  */
-export default class ElmKernelReplacementPlugin {
+export default class ElmKernelPatcherPlugin {
   /** Resolved plugin configuration with defaults applied */
-  private readonly options: Pick<ElmKernelReplacementPluginOptions, 'elmJsonFolder'> &
-    Required<Omit<ElmKernelReplacementPluginOptions, 'elmJsonFolder'>>
+  private readonly options: ElmKernelPatcherPluginOptions & { useArchive: boolean }
 
   /**
    * Creates a new instance of the Elm kernel replacement plugin
    *
    * @param options - plugin configuration options
    */
-  public constructor(options: ElmKernelReplacementPluginOptions) {
-    this.options = {
-      elmJsonFolder: options.elmJsonFolder,
-      isEnabled: options.isEnabled,
-      useArchive: options.useArchive ?? true,
-    }
+  public constructor(options: ElmKernelPatcherPluginOptions) {
+    this.options = { ...options, useArchive: options.useArchive ?? true }
   }
 
   /**
@@ -89,13 +117,22 @@ export default class ElmKernelReplacementPlugin {
    * @param compiler - the webpack compiler instance
    */
   public apply(compiler: Compiler): void {
-    if (!this.options.isEnabled) {
+    const { isEnabled } = this.options
+
+    if (isEnabled === false) {
       return
     }
 
     compiler.hooks.initialize.tap(PLUGIN_NAME, () => {
       try {
+        // A function decides here, once the configuration of webpack is complete.
+        if (typeof isEnabled === 'function' && !isEnabled(compiler)) {
+          return
+        }
+
         prettyInfo(`[${PLUGIN_NAME}]`, 'Patching Elm kernel packages before compilation…')
+
+        useElmHome(this.options.elmHome, this.options.elmJsonFolder)
 
         const args = prepareArgs(this.options.useArchive, this.options.elmJsonFolder)
         replaceKernelPackages(args)
@@ -106,4 +143,44 @@ export default class ElmKernelReplacementPlugin {
       }
     })
   }
+}
+
+/**
+ * Points `ELM_HOME` at the chosen folder, for the patcher and for the Elm
+ * compiler that the loader starts later in the same process.
+ *
+ * @param elmHome - the value of the option, which plain JavaScript may leave out
+ * @param elmJsonFolder - the folder that holds `elm.json`, the base of a relative path
+ * @throws Error when `elmHome` is missing
+ */
+function useElmHome(elmHome: ElmHome | undefined, elmJsonFolder: string | undefined): void {
+  if (elmHome === undefined) {
+    prettyError('elmHome checking', 'the plugin needs to know where to put the patched packages')
+    console.info(
+      indent(
+        "elmHome: 'default' keeps ELM_HOME, or ~/.elm, which every Elm project on the machine shares\n" +
+          "elmHome: 'elm-home/elm-stuff', or any folder, keeps the patched packages to this project"
+      )
+    )
+
+    throw new Error("The plugin is enabled but elmHome is missing; set it to 'default' or to a folder.")
+  }
+
+  if (elmHome !== 'default') {
+    process.env.ELM_HOME = path.resolve(elmJsonFolder ?? process.env.INIT_CWD ?? process.cwd(), elmHome)
+  }
+}
+
+/**
+ * Indents every line of a detail, so that it reads as part of the message
+ * printed above it.
+ *
+ * @param text - the detail, on one or more lines
+ * @returns the same text with each line indented
+ */
+function indent(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n')
 }

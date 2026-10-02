@@ -66,7 +66,7 @@ function command(): Command {
         Patcher.replaceKernelPackages(args)
       } catch (e) {
         prettyError('Patching failed', e)
-        program.error('unknown error running elm-kernel-replacement command')
+        program.error('unknown error running cli-elm-kernel-patcher')
       }
     })
 

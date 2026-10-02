@@ -167,7 +167,7 @@ export type ReplaceKernelArgs = {
  * pinned one, or when a patched package holds more than one version
  */
 export function replaceKernelPackages(args: ReplaceKernelArgs): void {
-  prettyInfo('> Running:', 'Elm Kernel Replacement script with given params')
+  prettyInfo('> Running:', 'Elm kernel patcher with given params')
   console.info(args)
   console.info('\n')
   let elmJsonDependencies

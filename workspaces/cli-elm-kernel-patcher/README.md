@@ -53,7 +53,10 @@ afterwards. Set it to `false` when you keep a `patches/` directory of your own.
 to `INIT_CWD`, which npm and yarn set when they run a script, and falls back to
 the current working directory.
 
-`ELM_HOME` overrides the default Elm home, which is `~/.elm`.
+`ELM_HOME` overrides the default Elm home, which is `~/.elm`. Set it to a folder
+of its own: the patched packages stay in `ELM_HOME`, and with the shared
+`~/.elm` every Elm project and every build on the machine would use them. The
+README of `@elm-toolkit/webpack-elm-kernel-patcher-plugin` shows a setup.
 
 ## What it does
 

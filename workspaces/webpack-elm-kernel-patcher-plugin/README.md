@@ -17,14 +17,24 @@ reloading still works through that runtime.
 ## Usage
 
 ```js
-import ElmKernelReplacementPlugin from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
+import ElmKernelPatcherPlugin from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
 
 export default {
-  plugins: [new ElmKernelReplacementPlugin({ isEnabled: true })],
+  plugins: [
+    new ElmKernelPatcherPlugin({
+      isEnabled: (compiler) => compiler.options.mode === 'development',
+      elmHome: 'elm-home/elm-stuff',
+    }),
+  ],
 }
 ```
 
-`isEnabled` turns the plugin on. When it is false, the plugin does nothing.
+`isEnabled` turns the plugin on. It is a boolean, or a function that receives
+the webpack compiler and decides when webpack starts, once the configuration,
+mode included, is complete. When it is `false`, the plugin does nothing.
+
+`elmHome` says where the patched packages go, and it is required unless
+`isEnabled` is `false`. The next section explains why.
 
 `useArchive` defaults to `true`, and then the patches come from the archive
 inside the patcher package. Set it to `false` to use a `patches/` directory of
@@ -38,6 +48,28 @@ refuses to run.
 
 When patching fails, the plugin prints a short message and passes the error to
 webpack, which stops the build.
+
+## Choosing elmHome
+
+The patcher replaces packages inside `ELM_HOME`, and they stay there. Without
+`ELM_HOME`, Elm uses `~/.elm`, which every Elm project on the machine shares, so
+every later build on that machine would compile against the patched kernel:
+other projects, and production builds that do not use this plugin, too.
+
+A folder as `elmHome`, relative to the folder that holds `elm.json`, keeps the
+patched packages to this project. `elm-home/elm-stuff` is a good choice, because
+tools such as elm-format ignore any folder with that name. The plugin also sets
+`ELM_HOME` to that folder for the whole webpack process, so the Elm loader
+compiles against the same packages without any other setting.
+
+`'default'` keeps the `ELM_HOME` of the environment, or `~/.elm` without one.
+Choose it only when the patched packages may reach every build that uses that
+folder.
+
+The project's own `elm-stuff/<version>` folder also keeps compiled code of the
+packages, and Elm reuses it even after `ELM_HOME` changes. Remove that folder
+before a production build on a machine where the plugin has run. A build on a
+clean checkout, as in CI, does not need this.
 
 ## Requirements
 
