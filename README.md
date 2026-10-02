@@ -8,10 +8,43 @@ the smallest possible footprint, leaning on the standard library and native
 Node features whenever possible.
 
 Each workspace under `workspaces/` is a package of its own, with its own README.
-The packages are not on the npm registry yet. To try one in another project,
-pack it and install the archive, as
-[Checking a package before you trust it](#checking-a-package-before-you-trust-it)
-shows.
+The packages are not on the npm registry yet. Each release on GitHub carries them
+as archives instead, as
+[Installing from a release](#installing-from-a-release) explains.
+
+## Installing from a release
+
+Every release has one archive for each package, named after the package and its
+version. Point the dependency at the URL of the archive:
+
+```json
+{
+  "dependencies": {
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+  }
+}
+```
+
+Some packages depend on other packages of this repository, for example the
+webpack loader on `@elm-toolkit/node-elm-compiler`. Their manifests ask for those
+packages by version, which the npm registry cannot provide. List the archive of
+each of them as well; the `dependencies` field in the `package.json` of a
+package names them.
+
+npm uses the archives you list. Yarn looks for those dependencies on the
+registry, so it also needs them in `resolutions`:
+
+```json
+{
+  "dependencies": {
+    "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-webpack-elm-loader-0.1.0.tgz",
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+  },
+  "resolutions": {
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0/elm-toolkit-node-elm-compiler-0.1.0.tgz"
+  }
+}
+```
 
 ## Requirements
 
@@ -98,6 +131,18 @@ reproduces the `node_modules` condition described above.
 Keys in an `exports` map are conditions, not free labels. A key that Node does
 not know resolves to nothing and reports no error, so subpaths belong on the
 left side of the map and `types` and `default` on the right.
+
+### Making a release
+
+Set the new versions in the manifests, merge them into `main`, then tag that
+commit and push the tag:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The release workflow runs the same checks as a pull request, packs every public
+workspace, and publishes a GitHub release with the archives.
 
 ## Thanks
 
