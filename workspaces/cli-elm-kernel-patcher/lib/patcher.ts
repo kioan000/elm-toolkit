@@ -112,13 +112,15 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
     throw new Error(`Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `)
   }
   assertElmVersion(path.join(args.PROJECT_ELM_ROOT, 'elm.json'))
-  if (args.USE_ARCHIVE) {
-    prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCH_ARCHIVE)
-    childProcess.execFileSync('tar', ['-xzf', args.PATCH_ARCHIVE, '-C', args.CURRENT])
-  }
 
-  // The archive is extracted into a temporary folder, which must go even when a check below stops the run.
+  // The archive is extracted inside the installed package, so the folder must go on every path,
+  // also when the extraction itself fails halfway and leaves part of it behind.
   try {
+    if (args.USE_ARCHIVE) {
+      prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCH_ARCHIVE)
+      childProcess.execFileSync('tar', ['-xzf', args.PATCH_ARCHIVE, '-C', args.CURRENT])
+    }
+
     applyPatches(args, elmJsonDependencies)
   } finally {
     if (args.USE_ARCHIVE) {
