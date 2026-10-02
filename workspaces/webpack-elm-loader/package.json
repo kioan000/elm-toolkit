@@ -1,0 +1,49 @@
+{
+  "author": "kioan000",
+  "type": "module",
+  "name": "@elm-toolkit/webpack-elm-loader",
+  "version": "0.0.1",
+  "description": "Webpack loaders that compile Elm modules and reload them in place during development",
+  "license": "BSD-3-Clause",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./hot": {
+      "types": "./dist/hot/index.d.ts",
+      "default": "./dist/hot/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.ts",
+    "hot/index.ts",
+    "hot/inject.ts",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "engines": {
+    "node": ">= 24.15.0 < 25",
+    "npm": ">= 11.4.1 <12"
+  },
+  "scripts": {
+    "build": "tsc -b && cp hot/runtime.js dist/hot/runtime.js",
+    "clean": "tsc -b --clean",
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@elm-toolkit/node-elm-compiler": "workspace:^"
+  },
+  "peerDependencies": {
+    "webpack": "^5.0.0"
+  },
+  "devDependencies": {
+    "elm": "^0.19.2-0",
+    "typescript": "^6.0.3",
+    "webpack": "^5.111.1"
+  }
+}

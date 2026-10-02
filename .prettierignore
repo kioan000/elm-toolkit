@@ -3,3 +3,5 @@ node_modules
 .idea
 dist
 **/*.elm
+# Vendored code, injected as text into compiled Elm output
+workspaces/webpack-elm-loader/hot/runtime.js

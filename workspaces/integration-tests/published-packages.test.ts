@@ -19,7 +19,12 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-const workspaces = ['@elm-toolkit/cli-lib', '@elm-toolkit/cli-elm-kernel-patcher', '@elm-toolkit/node-elm-compiler']
+const workspaces = [
+  '@elm-toolkit/cli-lib',
+  '@elm-toolkit/cli-elm-kernel-patcher',
+  '@elm-toolkit/node-elm-compiler',
+  '@elm-toolkit/webpack-elm-loader',
+]
 
 let consumer: string
 
@@ -114,5 +119,26 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
       exported,
       '_prepareProcessArgs,compile,compileSync,compileToString,compileToStringSync,compileWorker,findAllDependencies'
     )
+  })
+
+  it('exposes both webpack loaders as default exports', () => {
+    const exported = runInConsumer(`
+      const loader = await import('@elm-toolkit/webpack-elm-loader')
+      const hot = await import('@elm-toolkit/webpack-elm-loader/hot')
+      console.log(typeof loader.default, typeof hot.default)
+    `)
+
+    assert.equal(exported, 'function function')
+  })
+
+  it('ships the hot reload runtime that the hot loader reads', () => {
+    // The runtime is copied into dist by the build script, outside tsc, so only an installed
+    // package shows whether it arrived. The input is the smallest text that ends like Elm output.
+    const injected = runInConsumer(`
+      const hot = await import('@elm-toolkit/webpack-elm-loader/hot')
+      console.log(hot.default('(function(scope){_Platform_export({});}(this));').includes('HMR BEGIN'))
+    `)
+
+    assert.equal(injected, 'true')
   })
 })
