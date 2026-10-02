@@ -36,9 +36,9 @@ webpack, which stops the build.
 
 ## Requirements
 
-Node 24, webpack 5, and an Elm 0.19.1 project. The patches and the folders that
-the patcher writes are those of Elm 0.19.1, so the plugin does not support Elm
-0.19.2. The package is compiled to `dist/` and published as
+Node 24, webpack 5, and an Elm project on a version that the patcher supports,
+today 0.19.1 or 0.19.2. On another version the plugin stops the build before
+anything changes. The package is compiled to `dist/` and published as
 JavaScript.
 
 ## Thanks
