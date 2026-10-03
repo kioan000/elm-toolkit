@@ -19,7 +19,7 @@ there.
 The `elm/core`, `elm/browser` and `elm/virtual-dom` sources come from the
 branches of [elm/core#1155](https://github.com/elm/core/pull/1155) and its
 companion pull requests, which are still open. That `elm/core` reloads itself in
-a development build, through `Elm.hot.reload()`, and the hot loader of
+a development build, through `Elm.hot.reload()`, and the loader of
 `@elm-toolkit/webpack-elm-loader` uses it when it is there. A production build,
 made with `--optimize`, does not include that code.
 

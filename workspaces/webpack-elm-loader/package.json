@@ -3,7 +3,7 @@
   "type": "module",
   "name": "@elm-toolkit/webpack-elm-loader",
   "version": "0.1.0-alpha.2",
-  "description": "Webpack loaders that compile Elm modules and reload them in place during development",
+  "description": "A webpack loader that compiles Elm modules and reloads them in place during development",
   "license": "BSD-3-Clause",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,16 +11,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./hot": {
-      "types": "./dist/hot/index.d.ts",
-      "default": "./dist/hot/index.js"
     }
   },
   "files": [
     "dist",
     "index.ts",
-    "hot/index.ts",
     "hot/inject.ts",
     "README.md",
     "THIRD_PARTY_NOTICES.md"

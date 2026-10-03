@@ -1,13 +1,13 @@
 # @elm-toolkit/webpack-elm-loader
 
-Two webpack loaders for Elm. The first compiles an Elm module into JavaScript.
-The second adds hot module replacement to that JavaScript, so a change to an Elm
-file updates the running page and keeps its state.
+A webpack loader for Elm. It compiles an Elm module into JavaScript. In
+development mode it also adds hot module replacement to that JavaScript, so a
+change to an Elm file updates the running page and keeps its state.
 
-They are forks of [`elm-webpack-loader`](https://github.com/elm-community/elm-webpack-loader)
-and [`elm-hot-webpack-loader`](https://github.com/klazuka/elm-hot-webpack-loader).
-The compiler calls go through `@elm-toolkit/node-elm-compiler`, so the loaders
-have no other runtime dependency.
+It is a fork of [`elm-webpack-loader`](https://github.com/elm-community/elm-webpack-loader),
+with the work of [`elm-hot-webpack-loader`](https://github.com/klazuka/elm-hot-webpack-loader)
+inside it. The compiler calls go through `@elm-toolkit/node-elm-compiler`, so
+the loader has no other runtime dependency.
 
 ## Compiling Elm modules
 
@@ -40,21 +40,14 @@ and each source directory, so a new file is noticed too.
 
 ## Reloading in place
 
-Put the hot loader BEFORE the Elm loader. Webpack runs the loaders of a rule from
-the last one to the first, so the hot loader receives the compiled code. In the
-other order it receives the Elm source, and it stops the build with a message
-that says to swap the two loaders.
-
-```js
-use: [
-  { loader: '@elm-toolkit/webpack-elm-loader/hot' },
-  { loader: '@elm-toolkit/webpack-elm-loader', options: { cwd: import.meta.dirname } },
-]
-```
+In development mode the loader adds hot module replacement to the compiled code.
+The `hotModuleReplacement` option changes that default: `false` turns it off,
+for example when another loader already adds it, and `true` turns it on in any
+mode.
 
 The added code runs only when `module.hot` exists, which means under the
-development server with hot module replacement enabled. Use the rule only in
-development, because the added code makes the bundle much larger.
+development server with hot module replacement enabled. In other development
+builds it does nothing, and it only makes the bundle larger.
 
 The runtime in `hot/runtime.js` is the one from `elm-hot`, under its MIT
 license. It is injected as text into the compiled Elm code, so it is not linted
@@ -62,17 +55,17 @@ or formatted with the rest of the repository.
 
 An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
 reloads itself: a development build offers `Elm.hot.reload()`. When that is
-there, the hot loader passes each new version of the code to it, and the elm-hot
+there, the loader passes each new version of the code to it, and the elm-hot
 runtime stays off. Otherwise the elm-hot runtime does the work, as before. The
 patched kernel comes from `@elm-toolkit/webpack-elm-kernel-patcher-plugin`.
 
 ## Compatibility
 
-Both loaders work with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
+The loader works with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
 the `elm` npm package.
 
-The hot loader depends on internal functions of the Elm runtime, which it
-replaces to keep the state across a reload. Those functions have the same code
+Hot module replacement depends on internal functions of the Elm runtime, which
+it replaces to keep the state across a reload. Those functions have the same code
 in 0.19.1 and 0.19.2. With 0.19.2, a `Browser.application` served by
 webpack-dev-server takes a change to its Elm code in place: the view updates and
 the model keeps its values.
@@ -87,7 +80,7 @@ and published as JavaScript.
 
 ## Thanks
 
-These loaders exist because other people did the hard work first, and shared
+This loader exists because other people did the hard work first, and shared
 it. Thank you to all of them.
 
 - Richard Feldman created [`elm-webpack-loader`](https://github.com/elm-community/elm-webpack-loader),
@@ -98,7 +91,7 @@ it. Thank you to all of them.
   [`elm-hot-webpack-loader`](https://github.com/klazuka/elm-hot-webpack-loader),
   with their [contributors](https://github.com/klazuka/elm-hot/graphs/contributors).
   Keeping the model of a running Elm program across a code change is a delicate
-  piece of work, and the hot loader here reuses it almost unchanged.
+  piece of work, and the loader here reuses it almost unchanged.
 - Flux Xu wrote [`elm-hot-loader`](https://github.com/fluxxu/elm-hot-loader),
   the work that `elm-hot` is based on.
 

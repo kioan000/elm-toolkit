@@ -9,14 +9,12 @@
  * @packageDocumentation
  */
 
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { compileToString } from '@elm-toolkit/node-elm-compiler'
 
-import elmHotWebpackLoader from '../hot/index.ts'
 import { inject } from '../hot/inject.ts'
 import { findElmBinary } from './elm-binary.ts'
 
@@ -109,19 +107,5 @@ describe('inject', () => {
 
   it('refuses text that does not end like Elm output', () => {
     assert.throws(() => inject('console.log("not Elm")'), /must use the Elm 0\.19 compiler/)
-  })
-})
-
-describe('the hot reload loader', () => {
-  it('accepts the source as text or as a buffer', async () => {
-    const compiled = await compileFixture('Main', 'debug')
-
-    assert.equal(elmHotWebpackLoader(Buffer.from(compiled, 'utf8')), elmHotWebpackLoader(compiled))
-  })
-
-  it('names the fix when it receives Elm source, because it runs before the Elm loader', () => {
-    const elmSource = readFileSync(path.join(project, 'src', 'Main.elm'), 'utf8')
-
-    assert.throws(() => elmHotWebpackLoader(elmSource), /List it before the Elm loader in `use`/)
   })
 })
