@@ -29,6 +29,11 @@ The build uses `--debug` in development mode and `--optimize` in production
 mode. The options can change both, and they accept every option of
 `@elm-toolkit/node-elm-compiler`, for example `pathToElm`.
 
+`elmHome` sets the `ELM_HOME` that the compiler uses, relative to `cwd`. Without
+it, the compiler uses the `ELM_HOME` of the environment, or `~/.elm` when that is
+not set. When `@elm-toolkit/webpack-elm-kernel-patcher-plugin` patches an Elm
+home of its own, give the loader the same folder.
+
 In watch mode the loader reports every local module that the entry imports, so a
 change in any of them starts a new build. With `cwd`, it also watches `elm.json`
 and each source directory, so a new file is noticed too.

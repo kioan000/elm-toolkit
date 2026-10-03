@@ -126,7 +126,7 @@ describe('ElmKernelPatcherPlugin', () => {
     it(`copies the patched packages into the ${elmVersion} folder of ELM_HOME when webpack starts`, () => {
       writeElmJson(patchedVersions, elmVersion)
 
-      createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true }))
+      createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true }))
 
       for (const packageName of Object.keys(patchedVersions) as Array<keyof typeof patchedVersions>) {
         assert.ok(existsSync(sourceRecord(packageName, elmVersion)), `${packageName} should be patched`)
@@ -140,7 +140,7 @@ describe('ElmKernelPatcherPlugin', () => {
       writeElmJson(patchedVersions, elmVersion)
       mkdirSync(elmStuff, { recursive: true })
 
-      createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true }))
+      createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true }))
 
       assert.equal(existsSync(elmStuff), false)
     })
@@ -166,7 +166,7 @@ describe('ElmKernelPatcherPlugin', () => {
     })
     rmSync(path.join(fixture, 'elm-stuff'), { force: true, recursive: true })
 
-    createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: fixture, isEnabled: true }))
+    createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: fixture, isEnabled: true }))
     compile(elmHome, output)
 
     const compiled = readFileSync(output, 'utf8')
@@ -185,7 +185,7 @@ describe('ElmKernelPatcherPlugin', () => {
     writeElmJson({ ...patchedVersions, 'elm/virtual-dom': '1.0.3' })
 
     assert.throws(
-      () => createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true })),
+      () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
       /Expected version 1\.0\.5[^]*elm\/virtual-dom[^]*1\.0\.3/
     )
     assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
@@ -202,7 +202,7 @@ describe('ElmKernelPatcherPlugin', () => {
       writeElmJson(patchedVersions, elmVersion)
 
       assert.throws(
-        () => createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true })),
+        () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
         (thrown) =>
           thrown instanceof Error &&
           thrown.message.includes(`The patches support Elm 0.19.1 and 0.19.2, but elm.json declares ${elmVersion}.`)
@@ -214,12 +214,12 @@ describe('ElmKernelPatcherPlugin', () => {
 
   it('stops webpack when there is no elm.json', () => {
     assert.throws(
-      () => createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true })),
+      () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
       /Failed to read elm\.json/
     )
   })
 
-  it('resolves a relative elmHome against the elm.json folder, and uses it as the ELM_HOME of the process', () => {
+  it('patches an elmHome of its own, relative to the elm.json folder, and leaves ELM_HOME alone', () => {
     writeElmJson(patchedVersions)
 
     createCompiler(
@@ -228,19 +228,35 @@ describe('ElmKernelPatcherPlugin', () => {
 
     const dedicated = path.join(project, 'elm-home', 'elm-stuff')
 
-    // The Elm loader starts the compiler later in this process, so it reads the same folder.
-    assert.equal(process.env.ELM_HOME, dedicated)
+    assert.equal(process.env.ELM_HOME, elmHome, 'the environment of the process should not change')
     assert.ok(existsSync(path.join(dedicated, '0.19.1', 'packages', 'elm', 'core', '1.0.5', 'source.txt')))
     assert.deepEqual(readdirSync(elmHome), [], 'the ELM_HOME of the environment should stay untouched')
   })
 
-  it("keeps the ELM_HOME of the environment with elmHome: 'default'", () => {
-    writeElmJson(patchedVersions)
+  it('takes absolute paths for elmHome and patches', () => {
+    const dedicated = mkdtempSync(path.join(tmpdir(), 'elm-home-absolute-'))
 
-    createCompiler(new ElmKernelPatcherPlugin({ elmHome: 'default', elmJsonFolder: project, isEnabled: true }))
+    writeElmJson({ 'elm/html': '1.0.1' })
+    const patches = path.join(project, writeOwnPatches('https://example.org/html/absolute'))
 
-    assert.equal(process.env.ELM_HOME, elmHome)
-    assert.ok(existsSync(sourceRecord('elm/core', '0.19.1')))
+    try {
+      // A relative elmJsonFolder shows that an absolute path does not depend on any base folder.
+      createCompiler(
+        new ElmKernelPatcherPlugin({
+          elmHome: dedicated,
+          elmJsonFolder: path.relative(process.cwd(), project),
+          isEnabled: true,
+          patches,
+        })
+      )
+
+      const record = path.join(dedicated, '0.19.1', 'packages', 'elm', 'html', '1.0.1', 'source.txt')
+
+      assert.equal(readFileSync(record, 'utf8'), 'https://example.org/html/absolute')
+      assert.deepEqual(readdirSync(elmHome), [])
+    } finally {
+      rmSync(dedicated, { force: true, recursive: true })
+    }
   })
 
   it('patches when the isEnabled function says so, and passes it the compiler', () => {
@@ -250,7 +266,6 @@ describe('ElmKernelPatcherPlugin', () => {
 
     createCompiler(
       new ElmKernelPatcherPlugin({
-        elmHome,
         elmJsonFolder: project,
         isEnabled: (compiler): boolean => {
           modes.push(compiler.options.mode)
@@ -287,7 +302,6 @@ describe('ElmKernelPatcherPlugin', () => {
       () =>
         createCompiler(
           new ElmKernelPatcherPlugin({
-            elmHome,
             elmJsonFolder: project,
             isEnabled: (): boolean => {
               throw new Error('no mode given')
@@ -298,22 +312,11 @@ describe('ElmKernelPatcherPlugin', () => {
     )
   })
 
-  it('stops webpack when it may patch but elmHome is missing', () => {
-    writeElmJson(patchedVersions)
-
-    assert.throws(
-      // @ts-expect-error elmHome is required unless isEnabled is false; plain JavaScript can still leave it out.
-      () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
-      /The plugin is enabled but elmHome is missing; set it to 'default' or to a folder\./
-    )
-    assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
-  })
-
   it('uses a patches folder of its own, relative to the elm.json folder', () => {
     writeElmJson({ 'elm/html': '1.0.1' })
     const patches = writeOwnPatches('https://example.org/html/folder')
 
-    createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches }))
+    createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches }))
 
     assert.equal(readFileSync(sourceRecord('elm/html', '0.19.1'), 'utf8'), 'https://example.org/html/folder')
     assert.equal(existsSync(sourceRecord('elm/core', '0.19.1')), false, 'only the given patches should be copied')
@@ -326,7 +329,7 @@ describe('ElmKernelPatcherPlugin', () => {
     rmSync(path.join(project, 'kernel', 'patches'), { recursive: true })
 
     createCompiler(
-      new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches: 'kernel/patches.tar.gz' })
+      new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches: 'kernel/patches.tar.gz' })
     )
 
     assert.equal(readFileSync(sourceRecord('elm/html', '0.19.1'), 'utf8'), 'https://example.org/html/archive')
@@ -338,7 +341,7 @@ describe('ElmKernelPatcherPlugin', () => {
     writeElmJson({ 'elm/html': '1.0.1' }, '0.19.0')
     const patches = writeOwnPatches('https://example.org/html/0.19.0')
 
-    createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches }))
+    createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches }))
 
     assert.ok(existsSync(sourceRecord('elm/html', '0.19.0')))
   })
@@ -349,7 +352,7 @@ describe('ElmKernelPatcherPlugin', () => {
     assert.throws(
       () =>
         createCompiler(
-          new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches: 'missing.tar.gz' })
+          new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches: 'missing.tar.gz' })
         ),
       (thrown) => thrown instanceof Error && thrown.message === `No patches at ${path.join(project, 'missing.tar.gz')}.`
     )

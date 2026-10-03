@@ -55,16 +55,18 @@ function command(): Command {
       '--patches <path>',
       'A .tar.gz archive of a patches/ folder, or the folder itself; the archive of this package is the default'
     )
+    .option('--elmHome <path>', 'The Elm home to patch; ELM_HOME, or ~/.elm, is the default')
     .option(
       '--elmJsonFolder <type>',
       'Your project folder where elm.json stands, if not specified current working dir is used instead'
     )
-    .action(({ elmJsonFolder, patches }) => {
+    .action(({ elmHome, elmJsonFolder, patches }) => {
       try {
+        const ELM_HOME = elmHome ? String(elmHome) : undefined
         const ELM_JSON_FOLDER = elmJsonFolder ? String(elmJsonFolder) : undefined
         const PATCHES = patches ? String(patches) : undefined
 
-        const args = Patcher.prepareArgs({ elmJsonFolder: ELM_JSON_FOLDER, patches: PATCHES })
+        const args = Patcher.prepareArgs({ elmHome: ELM_HOME, elmJsonFolder: ELM_JSON_FOLDER, patches: PATCHES })
         Patcher.replaceKernelPackages(args)
       } catch (e) {
         prettyError('Patching failed', e)

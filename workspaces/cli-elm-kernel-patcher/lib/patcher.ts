@@ -48,6 +48,12 @@ const patchArchives: Readonly<Record<string, string>> = {
  */
 export type PatchOptions = {
   /**
+   * The Elm home to patch. A relative path starts from the folder that holds
+   * `elm.json`. Without it, the `ELM_HOME` of the environment is used, or
+   * `~/.elm` when that is not set.
+   */
+  elmHome?: string
+  /**
    * The folder that holds `elm.json`. It defaults to `INIT_CWD`, which npm and
    * yarn set when they run a script, and then to the current directory.
    */
@@ -64,8 +70,8 @@ export type PatchOptions = {
  * Resolves every path the patching depends on, so a caller can inspect them
  * before any file is touched.
  *
- * The Elm home comes from `ELM_HOME` when it is set, and from the user home
- * directory otherwise.
+ * The Elm home is the one in the options, then the `ELM_HOME` of the
+ * environment, then `~/.elm`.
  *
  * The Elm version comes from `elm-version` in the project's `elm.json`. Elm keeps
  * its packages and its cache in folders named after that version, so every path
@@ -80,7 +86,7 @@ export type PatchOptions = {
  *   replaceKernelPackages(prepareArgs())
  * ```
  *
- * @param options - the project folder and the patches to use, both optional
+ * @param options - the project folder, the Elm home and the patches to use, all optional
  * @returns the resolved paths, ready for `replaceKernelPackages`
  * @throws Error when `elm.json` cannot be read, when it declares an Elm version
  * that the bundled patches do not support, or when the given patches do not exist
@@ -88,7 +94,10 @@ export type PatchOptions = {
 export function prepareArgs(options: PatchOptions = {}): ReplaceKernelArgs {
   const ROOT = options.elmJsonFolder ?? process.env.INIT_CWD ?? process.cwd()
   const ELM_VERSION = readElmVersion(path.join(ROOT, 'elm.json'), options.patches === undefined)
-  const ELM_HOME = process.env.ELM_HOME || path.join(os.homedir(), '.elm')
+  const ELM_HOME =
+    options.elmHome === undefined
+      ? process.env.ELM_HOME || path.join(os.homedir(), '.elm')
+      : path.resolve(ROOT, options.elmHome)
   const ELM_HOME_PACKAGES = path.join(ELM_HOME, ELM_VERSION, 'packages')
   const PATCHES =
     options.patches === undefined

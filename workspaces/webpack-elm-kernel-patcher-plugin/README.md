@@ -23,7 +23,6 @@ export default {
   plugins: [
     new ElmKernelPatcherPlugin({
       isEnabled: (compiler) => compiler.options.mode === 'development',
-      elmHome: 'elm-home/elm-stuff',
     }),
   ],
 }
@@ -33,8 +32,9 @@ export default {
 the webpack compiler and decides when webpack starts, once the configuration,
 mode included, is complete. When it is `false`, the plugin does nothing.
 
-`elmHome` says where the patched packages go, and it is required unless
-`isEnabled` is `false`. The next section explains why.
+`elmHome` names the Elm home to patch, relative to the folder that holds
+`elm.json`. Without it, the plugin patches the `ELM_HOME` of the environment,
+or `~/.elm` when that is not set. The next section explains when to set it.
 
 `patches` names patches of your own: a `.tar.gz` archive of a `patches/`
 folder, or that folder itself, relative to the folder that holds `elm.json`.
@@ -50,7 +50,7 @@ refuses to run.
 When patching fails, the plugin prints a short message and passes the error to
 webpack, which stops the build.
 
-## Choosing elmHome
+## Choosing Elm home
 
 The patcher replaces packages inside `ELM_HOME`, and they stay there. Without
 `ELM_HOME`, Elm uses `~/.elm`, which every Elm project on the machine shares, so
@@ -59,13 +59,8 @@ other projects, and production builds that do not use this plugin, too.
 
 A folder as `elmHome`, relative to the folder that holds `elm.json`, keeps the
 patched packages to this project. `elm-home/elm-stuff` is a good choice, because
-tools such as elm-format ignore any folder with that name. The plugin also sets
-`ELM_HOME` to that folder for the whole webpack process, so the Elm loader
-compiles against the same packages without any other setting.
-
-`'default'` keeps the `ELM_HOME` of the environment, or `~/.elm` without one.
-Choose it only when the patched packages may reach every build that uses that
-folder.
+tools such as elm-format ignore any folder with that name. The Elm compiler of
+the build must then use the same folder as its `ELM_HOME`.
 
 The project's own `elm-stuff/<version>` folder also keeps compiled code of the
 packages, and Elm reuses it even after `ELM_HOME` changes. Remove that folder

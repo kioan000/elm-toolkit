@@ -11,7 +11,7 @@
  * @packageDocumentation
  */
 
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'node:test'
@@ -160,6 +160,28 @@ describe('the Elm loader', () => {
 
     assert.match(run.error?.message ?? '', /Could not find Elm compiler/)
   })
+
+  for (const [kind, elmHome, expected] of [
+    ['a relative', 'elm-home/elm-stuff', path.join(project, 'elm-home', 'elm-stuff')],
+    ['an absolute', path.join(tmpdir(), 'elm-home'), path.join(tmpdir(), 'elm-home')],
+  ]) {
+    it(`starts the compiler with ${kind} elmHome as ELM_HOME, resolved against cwd`, async () => {
+      const directory = mkdtempSync(path.join(tmpdir(), 'elm-loader-home-'))
+      const record = path.join(directory, 'elm-home.txt')
+      const fakeElm = path.join(directory, 'elm')
+
+      // A stand-in for the compiler that only records the Elm home it receives.
+      writeFileSync(fakeElm, `#!/bin/sh\nprintf '%s' "$ELM_HOME" > '${record}'\nexit 1\n`, { mode: 0o755 })
+
+      try {
+        await runLoader({ query: { cwd: project, elmHome, pathToElm: fakeElm } })
+
+        assert.equal(readFileSync(record, 'utf8'), expected)
+      } finally {
+        rmSync(directory, { force: true, recursive: true })
+      }
+    })
+  }
 
   it('watches elm.json, the source directories and every local module the entry imports', async () => {
     const run = await runLoader({ query: inProject, watching: true })

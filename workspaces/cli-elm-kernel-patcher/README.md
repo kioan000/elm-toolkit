@@ -42,7 +42,7 @@ in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 ## Usage
 
 ```sh
-cli-elm-kernel-patcher [--patches <path>] [--elmJsonFolder <path>]
+cli-elm-kernel-patcher [--patches <path>] [--elmHome <path>] [--elmJsonFolder <path>]
 ```
 
 Without `--patches`, the tool uses the patch archive that ships with the
@@ -59,10 +59,14 @@ holds `elm.json`. Inside `patches/`, each package sits at
 to `INIT_CWD`, which npm and yarn set when they run a script, and falls back to
 the current working directory.
 
-`ELM_HOME` overrides the default Elm home, which is `~/.elm`. Set it to a folder
-of its own: the patched packages stay in `ELM_HOME`, and with the shared
-`~/.elm` every Elm project and every build on the machine would use them. The
-README of `@elm-toolkit/webpack-elm-kernel-patcher-plugin` shows a setup.
+`--elmHome` names the Elm home to patch. A relative path starts from the folder
+that holds `elm.json`. Without it, the tool patches the `ELM_HOME` of the
+environment, or `~/.elm` when that is not set.
+
+The patched packages stay in that Elm home. `~/.elm` is shared by every Elm
+project on the machine, so every build that uses it compiles against the
+patched kernel. A folder of its own keeps the patches to one project, but Elm
+must then compile with the same `ELM_HOME`.
 
 ## What it does
 

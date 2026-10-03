@@ -32,6 +32,7 @@ interface ElmLoaderOptions {
   [key: string]: unknown
   cwd?: string
   debug?: boolean
+  elmHome?: string
   files?: string[]
   optimize?: boolean
   output?: string
@@ -223,10 +224,13 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
   const outputPath = path.join(tempDir, `elm-output${suffix}`)
 
   return new Promise((resolve, reject) => {
+    // The compiler refuses options it does not know, so elmHome reaches it as ELM_HOME instead.
+    const { elmHome, ...compilerOptions } = options
+    const env = elmHome === undefined ? {} : { env: { ELM_HOME: path.resolve(options.cwd ?? process.cwd(), elmHome) } }
     const finalOptions = {
-      ...options,
+      ...compilerOptions,
       output: outputPath,
-      processOpts: { stdio: 'inherit' as const },
+      processOpts: { stdio: 'inherit' as const, ...env },
     }
 
     try {
