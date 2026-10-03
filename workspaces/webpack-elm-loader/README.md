@@ -40,8 +40,10 @@ and each source directory, so a new file is noticed too.
 
 ## Reloading in place
 
-Put the hot loader before the Elm loader. Webpack runs the loaders of a rule from
-the last one to the first, so the hot loader receives the compiled code.
+Put the hot loader BEFORE the Elm loader. Webpack runs the loaders of a rule from
+the last one to the first, so the hot loader receives the compiled code. In the
+other order it receives the Elm source, and it stops the build with a message
+that says to swap the two loaders.
 
 ```js
 use: [

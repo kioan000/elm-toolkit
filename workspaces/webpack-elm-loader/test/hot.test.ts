@@ -9,6 +9,7 @@
  * @packageDocumentation
  */
 
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -116,5 +117,11 @@ describe('the hot reload loader', () => {
     const compiled = await compileFixture('Main', 'debug')
 
     assert.equal(elmHotWebpackLoader(Buffer.from(compiled, 'utf8')), elmHotWebpackLoader(compiled))
+  })
+
+  it('names the fix when it receives Elm source, because it runs before the Elm loader', () => {
+    const elmSource = readFileSync(path.join(project, 'src', 'Main.elm'), 'utf8')
+
+    assert.throws(() => elmHotWebpackLoader(elmSource), /List it before the Elm loader in `use`/)
   })
 })
