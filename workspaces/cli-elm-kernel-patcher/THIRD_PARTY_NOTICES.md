@@ -17,7 +17,7 @@ BSD-3-Clause with his permission.
 
 https://github.com/lydell/core
 
-The patch archive contains this fork, from the branch of elm/core#1155, at the commit recorded in its `source.txt`. The `elm/browser` and `elm/virtual-dom` forks below come from the matching branches. The fork keeps the license of `elm/core`.
+The patch archive contains this fork, from the branch of elm/core#1155, at the commit recorded in its `source.txt` and in `lib/elm-kernel-patcher.json`, with its `LICENSE`. The `elm/browser` and `elm/virtual-dom` forks below come from the matching branches. The fork keeps the license of `elm/core`.
 
 ```text
 Copyright 2014-present Evan Czaplicki
@@ -37,7 +37,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 https://github.com/lydell/virtual-dom
 
-The patch archive contains this fork, at the commit recorded in its `source.txt`. The fork keeps the license of `elm/virtual-dom`.
+The patch archive contains this fork, at the commit recorded in its `source.txt` and in `lib/elm-kernel-patcher.json`, with its `LICENSE`. The fork keeps the license of `elm/virtual-dom`.
 
 ```text
 Copyright (c) 2016-present, Evan Czaplicki
@@ -76,7 +76,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 https://github.com/lydell/browser
 
-The patch archive contains this fork, at the commit recorded in its `source.txt`. The fork keeps the license of `elm/browser`.
+The patch archive contains this fork, at the commit recorded in its `source.txt` and in `lib/elm-kernel-patcher.json`, with its `LICENSE`. The fork keeps the license of `elm/browser`.
 
 ```text
 Copyright 2017-present Evan Czaplicki
@@ -96,7 +96,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 https://github.com/lydell/html
 
-The patch archive contains this fork, at the commit recorded in its `source.txt`. The fork keeps the license of `elm/html`.
+The patch archive contains this fork, at the commit recorded in its `source.txt` and in `lib/elm-kernel-patcher.json`, with its `LICENSE`. The fork keeps the license of `elm/html`.
 
 ```text
 Copyright (c) 2014-present, Evan Czaplicki

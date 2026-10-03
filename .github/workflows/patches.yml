@@ -1,0 +1,43 @@
+name: Patches
+
+# Rebuilds the bundled patch archive from lib/elm-kernel-patcher.json and compares the
+# two. On a pull request it proves that the archive and the manifest agree. The
+# weekly run notices when a commit of the manifest is no longer reachable, for
+# example after a fork was deleted, while the published archive keeps working.
+on:
+  pull_request:
+    paths:
+      - workspaces/cli-elm-kernel-patcher/lib/elm-kernel-patcher.json
+      - workspaces/cli-elm-kernel-patcher/lib/patches.tar.gz
+      - workspaces/cli-elm-kernel-patcher/lib/archive-builder.ts
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  check:
+    name: Check the patch archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: corepack enable
+
+      # Same cache as the CI workflow; see the comment there.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            yarn-${{ runner.os }}-
+
+      - run: yarn install --immutable
+
+      - run: yarn workspace @elm-toolkit/cli-elm-kernel-patcher patches:check

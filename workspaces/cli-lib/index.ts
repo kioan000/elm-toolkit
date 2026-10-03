@@ -10,6 +10,11 @@
  * The two self inspection functions take the caller's `import.meta.url`, because
  * the answer concerns the calling module and not this one.
  *
+ * `Maybe` and `Result` bring the types of the same names from `elm/core`, with
+ * their functions. A step that can fail returns a `Result` with a `CliError`
+ * instead of throwing, and the function that runs a command prints that error
+ * once, with `CliError.print`.
+ *
  * @packageDocumentation
  */
 
@@ -17,6 +22,11 @@ import { type SpawnOptionsWithoutStdio, spawn } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+export { CliError } from './cli-error.ts'
+export { CliSuccess } from './cli-success.ts'
+export { Maybe } from './maybe.ts'
+export { Result } from './result.ts'
 
 /**
  * A parsed `package.json`, with the two fields this library reads named and the

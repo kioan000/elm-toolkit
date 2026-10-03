@@ -14,5 +14,5 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["index.ts"]
+  "include": ["index.ts", "cli-error.ts", "cli-success.ts", "layout.ts", "maybe.ts", "result.ts"]
 }

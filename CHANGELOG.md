@@ -69,20 +69,24 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   - On the command line, `--useArchive false` becomes
     `--patches kernel/patches`.
 
-- **`prepareArgs` takes an options object**
+- **The patching routines take options and return a `Result`**
 
   `@elm-toolkit/cli-elm-kernel-patcher`: `prepareArgs` takes one options object
-  instead of two arguments. The value it returns has `PATCHES` instead of
-  `CURRENT`, `PATCH_ARCHIVE`, `PATCH_DIR` and `USE_ARCHIVE`.
+  instead of two arguments. It and `replaceKernelPackages` return a `Result`
+  from `@elm-toolkit/cli-lib` instead of throwing. The value of `prepareArgs`
+  has `PATCHES` instead of `CURRENT`, `PATCH_ARCHIVE`, `PATCH_DIR` and
+  `USE_ARCHIVE`.
 
   **How to fix:**
-  - Pass the project folder by name, and drop the first argument:
+  - Call `patchKernel`, which runs both steps and prints the outcome:
 
     ```diff
     -replaceKernelPackages(prepareArgs(true, 'frontend'))
-    +replaceKernelPackages(prepareArgs({ elmJsonFolder: 'frontend' }))
+    +patchKernel({ elmJsonFolder: 'frontend' })
     ```
 
+  - Instead of catching an error, check the `tag` of the result; an `Err`
+    holds a `CliError`, which `CliError.toString` turns into text.
   - With `false` as the first argument, also add `patches`, as described above.
   - Code that reads the returned paths reads `PATCHES` instead.
 
@@ -130,6 +134,14 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ### Added
 
+- `@elm-toolkit/cli-lib`: `Maybe` and `Result`, with the functions of the
+  modules of the same names in `elm/core` as methods, so that the steps read
+  from top to bottom: `Result.fromAttempt(read).map(parse).mapError(describe)`.
+  `Result.fromAttempt` turns an exception into an `Err`. `CliError` and
+  `CliSuccess` describe the outcome of a command for a person, and their
+  `print` functions show it the way every command of the toolkit does.
+- `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
+  home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a
   `.tar.gz` archive of a `patches/` folder, or the folder itself. Such patches
   skip the check of the Elm version, and a wrong layout stops with the expected
@@ -144,12 +156,25 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   `Elm.hot.reload()` when the kernel offers it.
 - `@elm-toolkit/webpack-elm-loader`: the `hotModuleReplacement` option, which
   defaults to the development mode of webpack.
+- `@elm-toolkit/cli-elm-kernel-patcher`: the `archive init`, `archive build` and
+  `archive check` commands, and the `./archive-builder` subpath. They keep a
+  manifest of Git commits and the archive built from it in one folder,
+  `elm-kernel-patcher/`, which `patches` accepts. A JSON schema of the manifest
+  lets editors complete and check it.
 
 ### Changed
 
+- `@elm-toolkit/cli-elm-kernel-patcher`: every outcome prints in one layout: a
+  highlighted line that says what happened, then the sections "What happened:",
+  "How to fix:" and "Next step:", each after a blank line. A suggested command
+  keeps the options that were used. The settings of a patch run print as
+  lines, and an error prints a stack trace only when it looks like a bug.
 - `@elm-toolkit/cli-elm-kernel-patcher`: an archive is extracted into a
   temporary folder, not inside the installed package, so the patcher works when
   `node_modules` is read only.
+- `@elm-toolkit/cli-elm-kernel-patcher`: each package in the bundled patches
+  carries the `LICENSE` of its fork. The archive is now built from
+  `lib/elm-kernel-patcher.json`, which names the commit of each package.
 
 ## [0.1.0-alpha.2] - 2026-10-02
 

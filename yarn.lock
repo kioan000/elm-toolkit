@@ -32,6 +32,7 @@ __metadata:
   resolution: "@elm-toolkit/cli-elm-kernel-patcher@workspace:workspaces/cli-elm-kernel-patcher"
   dependencies:
     "@elm-toolkit/cli-lib": "workspace:^"
+    ajv: "npm:^8.20.0"
     commander: "npm:^15.0.0"
     typescript: "npm:^6.0.3"
   bin:

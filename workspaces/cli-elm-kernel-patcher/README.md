@@ -11,10 +11,10 @@ refuses to run when the patched version and the pinned version disagree.
 
 ## Where the patches come from
 
-The patches are not ours. They come from the patched Elm kernel packages that
-[lydell](https://github.com/lydell) maintains as forks, covering `elm/core`,
-`elm/virtual-dom`, `elm/browser` and `elm/html`. All credit for that work belongs
-there.
+This package does not write the patches. They come from the patched Elm kernel
+packages that [lydell](https://github.com/lydell) maintains as forks, covering
+`elm/core`, `elm/virtual-dom`, `elm/browser` and `elm/html`. All credit for that
+work belongs there.
 
 The shipped patches contain these changes:
 
@@ -40,6 +40,15 @@ package includes a `source.txt` file that records the exact upstream commit its
 code was taken from, so the origin of any file can always be traced from the
 patch itself rather than from this document.
 
+[lib/elm-kernel-patcher.json](lib/elm-kernel-patcher.json) names those commits,
+one for each package. The archive in `lib/` is built from it with the `archive`
+commands below, and it keeps its own copy of the code, so a project never needs
+the network or the forks to patch. To change the patches of this package, change
+a commit in that file and run
+`corepack yarn workspace @elm-toolkit/cli-elm-kernel-patcher patches:build`. The
+CI checks the archive against the manifest on every pull request that touches
+them, and once a week, to notice a commit that is no longer reachable.
+
 The way the patches are applied comes from lydell too. The patching routine
 follows `replace-kernel-packages.mjs`, the script that he publishes with
 [elm-safe-virtual-dom](https://github.com/lydell/elm-safe-virtual-dom), together
@@ -61,15 +70,22 @@ Without `--patches`, the tool uses the patch archive that ships with the
 package. It extracts the archive into a temporary folder, applies the patches,
 and removes the folder afterwards.
 
-`--patches` names patches of your own: a `.tar.gz` archive of a `patches/`
-folder, or that folder itself. A relative path starts from the folder that
-holds `elm.json`. Inside `patches/`, each package sits at
-`<author>/<package>/<version>/`, with its `elm.json`, its `src` and a
-`source.txt` file. An archive is made with `tar -czf patches.tar.gz patches`.
+`--patches` names patches of your own. A relative path starts from the folder
+that holds `elm.json`. It accepts three forms:
+
+- a patch folder, made by the `archive` commands below: the tool uses the
+  `patches.tar.gz` next to its `elm-kernel-patcher.json`;
+- a `.tar.gz` archive of a `patches/` folder, made with
+  `tar -czf patches.tar.gz patches`;
+- such a `patches/` folder itself.
+
+Inside `patches/`, each package sits at `<author>/<package>/<version>/`, with
+its `elm.json`, its `src` and a `source.txt` file.
 
 `--elmJsonFolder` is the folder that holds the project's `elm.json`. It defaults
 to `INIT_CWD`, which npm and yarn set when they run a script, and falls back to
-the current working directory.
+the current working directory. The options of the patcher go before any
+subcommand; the `archive` subcommands have their own.
 
 `--elmHome` names the Elm home to patch. A relative path starts from the folder
 that holds `elm.json`. Without it, the tool patches the `ELM_HOME` of the
@@ -79,6 +95,68 @@ The patched packages stay in that Elm home. `~/.elm` is shared by every Elm
 project on the machine, so every build that uses it compiles against the
 patched kernel. A folder of its own keeps the patches to one project, but Elm
 must then compile with the same `ELM_HOME`.
+
+## Building an archive of your own
+
+The `archive` commands build a patch archive from Git commits that you choose,
+the same way this package builds its own. They work in a patch folder,
+`elm-kernel-patcher/` next to `elm.json`, which holds two files:
+
+```text
+elm-kernel-patcher/
+  elm-kernel-patcher.json   the manifest: which commit of which fork
+  patches.tar.gz            the archive, built from the manifest
+```
+
+Start from the patches of this package, change what you need, build, and give
+the folder to the patcher:
+
+```sh
+cli-elm-kernel-patcher archive init
+cli-elm-kernel-patcher archive build
+cli-elm-kernel-patcher --patches elm-kernel-patcher
+```
+
+`archive init` creates the folder with a copy of the manifest of this package.
+It never overwrites a manifest. Each entry under `patches` names a package, the
+Git address of its fork and a full commit hash; a branch name is refused,
+because it can point somewhere else later, and a package may appear once.
+`pullRequest` is free text for the reader:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/kioan000/elm-toolkit/main/workspaces/cli-elm-kernel-patcher/lib/elm-kernel-patcher.schema.json",
+  "patches": [
+    {
+      "packageName": "elm/html",
+      "git": "https://github.com/lydell/html.git",
+      "commit": "b35c476a69f0ba9bf8282d8c15df65e63aefea8f"
+    }
+  ]
+}
+```
+
+The `$schema` line points at the JSON schema of the manifest, which the package
+also ships in `lib/`. Editors such as VS Code and the JetBrains IDEs read it, so
+they complete the fields and mark a short commit or a misspelled field as you
+type. The commands ignore the line, and they check once more that a package
+appears only once, which a schema cannot express.
+
+`archive build` fetches each commit with `git` and writes `patches.tar.gz`. Any
+Git server works, and a private repository works with the Git credentials you
+already have. From each commit the archive keeps `elm.json`, `LICENSE` and
+`src/`, and adds `source.txt` with the address of the commit. The `name` and
+`version` in the `elm.json` of the commit decide where the package goes, so a
+commit that holds another package stops the build.
+
+`archive check` builds the same files again and compares them with the archive,
+file by file. It fails when the two differ, or when a commit can no longer be
+fetched.
+
+`--folder` changes the patch folder, and `--elmJsonFolder` the folder it starts
+from, with the same defaults as the patcher. Keep the folder in the repository,
+or in a cache, and Git is needed only when a commit changes. The folder also
+leaves room for more settings later.
 
 ## What it does
 
@@ -125,11 +203,19 @@ replaceKernelPackages(
 )
 ```
 
+The archive builder is importable too, with the same steps as the commands:
+
+```ts
+import { buildArchive, checkArchive } from '@elm-toolkit/cli-elm-kernel-patcher/archive-builder'
+
+buildArchive({ elmJsonFolder: 'frontend' })
+```
+
 ## Requirements
 
 Node 24, an Elm project with a valid `elm.json`, and `tar` on the `PATH` when the
 patches come from an archive. With the bundled patches, the project uses Elm
-0.19.1 or 0.19.2.
+0.19.1 or 0.19.2. The `archive` commands also need `git`.
 
 The package installs one executable, which runs the compiled JavaScript in
 `dist/`. Node refuses to strip TypeScript types from files under `node_modules`,

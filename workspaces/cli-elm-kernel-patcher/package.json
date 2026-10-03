@@ -16,6 +16,10 @@
       "types": "./dist/lib/patcher.d.ts",
       "default": "./dist/lib/patcher.js"
     },
+    "./archive-builder": {
+      "types": "./dist/lib/archive-builder.d.ts",
+      "default": "./dist/lib/archive-builder.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": "./dist/command.js",
@@ -23,7 +27,10 @@
     "dist",
     "command.ts",
     "lib/patcher.ts",
+    "lib/archive-builder.ts",
     "lib/patches.tar.gz",
+    "lib/elm-kernel-patcher.json",
+    "lib/elm-kernel-patcher.schema.json",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
   ],
@@ -32,16 +39,20 @@
     "npm": ">= 11.4.1 <12"
   },
   "scripts": {
-    "build": "tsc -b && cp lib/patches.tar.gz dist/lib/patches.tar.gz",
+    "build": "tsc -b && cp lib/patches.tar.gz lib/elm-kernel-patcher.json dist/lib/",
     "clean": "tsc -b --clean",
     "dev": "node command.ts",
-    "prepare": "yarn build"
+    "patches:build": "yarn build && node dist/command.js archive build --folder lib --elmJsonFolder .",
+    "patches:check": "yarn build && node dist/command.js archive check --folder lib --elmJsonFolder .",
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@elm-toolkit/cli-lib": "workspace:^",
     "commander": "^15.0.0"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "typescript": "^6.0.3"
   }
 }

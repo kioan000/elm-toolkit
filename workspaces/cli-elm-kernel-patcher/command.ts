@@ -7,11 +7,16 @@
  * when Node started this file. Importing it therefore has no effect, which lets a
  * caller read the command definition without running the patcher.
  *
+ * Without a subcommand the tool patches the Elm home. The `archive` subcommands
+ * start a manifest of Git commits, build a patch archive from it, and check that
+ * the archive still matches; `lib/archive-builder.ts` does that work.
+ *
  * @packageDocumentation
  */
 
-import { isEntryPoint, prettyError, readPackageJson } from '@elm-toolkit/cli-lib'
+import { type CliError, type Result, isEntryPoint, readPackageJson } from '@elm-toolkit/cli-lib'
 import { Command } from 'commander'
+import * as ArchiveBuilder from './lib/archive-builder.ts'
 import * as Patcher from './lib/patcher.ts'
 
 const program = command()
@@ -46,6 +51,8 @@ if (isEntryPoint(import.meta.url)) {
 function command(): Command {
   const program = new Command()
 
+  // The archive subcommands have their own --elmJsonFolder, so the options of the patcher stop at a subcommand.
+  program.enablePositionalOptions()
   program
     .name('cli-elm-kernel-patcher')
     .description('This scripts changes your current ELM_HOME folder with a given set of kernel patches')
@@ -53,26 +60,54 @@ function command(): Command {
   program
     .option(
       '--patches <path>',
-      'A .tar.gz archive of a patches/ folder, or the folder itself; the archive of this package is the default'
+      'A patch folder made by the archive commands, a .tar.gz archive of a patches/ folder, or that folder; the archive of this package is the default'
     )
     .option('--elmHome <path>', 'The Elm home to patch; ELM_HOME, or ~/.elm, is the default')
     .option(
       '--elmJsonFolder <type>',
       'Your project folder where elm.json stands, if not specified current working dir is used instead'
     )
-    .action(({ elmHome, elmJsonFolder, patches }) => {
-      try {
-        const ELM_HOME = elmHome ? String(elmHome) : undefined
-        const ELM_JSON_FOLDER = elmJsonFolder ? String(elmJsonFolder) : undefined
-        const PATCHES = patches ? String(patches) : undefined
+    .action((options) => exitOnError(Patcher.patchKernel(options)))
 
-        const args = Patcher.prepareArgs({ elmHome: ELM_HOME, elmJsonFolder: ELM_JSON_FOLDER, patches: PATCHES })
-        Patcher.replaceKernelPackages(args)
-      } catch (e) {
-        prettyError('Patching failed', e)
-        program.error('unknown error running cli-elm-kernel-patcher')
-      }
-    })
+  const archive = program
+    .command('archive')
+    .description('Build a patch archive from a manifest of Git commits, to pass to --patches')
+
+  archive
+    .command('init')
+    .description('Create the patch folder with a manifest of the patches of this package, as a starting point')
+    .option('--folder <path>', 'The patch folder, relative to the elm.json folder', 'elm-kernel-patcher')
+    .option('--elmJsonFolder <path>', 'The folder that holds elm.json; the current working dir is the default')
+    .action((options) => exitOnError(ArchiveBuilder.initManifest(options)))
+
+  archive
+    .command('build')
+    .description('Fetch every commit of the manifest and write the archive of the patch folder')
+    .option('--folder <path>', 'The patch folder, relative to the elm.json folder', 'elm-kernel-patcher')
+    .option('--elmJsonFolder <path>', 'The folder that holds elm.json; the current working dir is the default')
+    .action((options) => exitOnError(ArchiveBuilder.buildArchive(options)))
+
+  archive
+    .command('check')
+    .description('Build the manifest again and compare it with the archive, file by file')
+    .option('--folder <path>', 'The patch folder, relative to the elm.json folder', 'elm-kernel-patcher')
+    .option('--elmJsonFolder <path>', 'The folder that holds elm.json; the current working dir is the default')
+    .action((options) => exitOnError(ArchiveBuilder.checkArchive(options)))
 
   return program
+}
+
+/**
+ * Sets a non-zero exit code after a failed step. The step has already printed
+ * its outcome.
+ *
+ * @param outcome - the outcome of the step
+ */
+function exitOnError(outcome: Result<CliError, unknown>): void {
+  switch (outcome.tag) {
+    case 'Ok':
+      return
+    case 'Err':
+      process.exitCode = 1
+  }
 }

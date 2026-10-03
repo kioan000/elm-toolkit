@@ -186,7 +186,7 @@ describe('ElmKernelPatcherPlugin', () => {
 
     assert.throws(
       () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
-      /Expected version 1\.0\.5[^]*elm\/virtual-dom[^]*1\.0\.3/
+      /elm\/virtual-dom is 1\.0\.5 in the patches, but elm\.json pins 1\.0\.3\./
     )
     assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
     assert.equal(existsSync(extractedPatches), false, 'the extracted archive should be removed')
@@ -215,7 +215,7 @@ describe('ElmKernelPatcherPlugin', () => {
   it('stops webpack when there is no elm.json', () => {
     assert.throws(
       () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
-      /Failed to read elm\.json/
+      /elm\.json does not exist\./
     )
   })
 
@@ -382,7 +382,11 @@ describe('ElmKernelPatcherPlugin', () => {
         createCompiler(
           new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches: 'missing.tar.gz' })
         ),
-      (thrown) => thrown instanceof Error && thrown.message === `No patches at ${path.join(project, 'missing.tar.gz')}.`
+      (thrown) =>
+        thrown instanceof Error &&
+        thrown.message.startsWith(
+          `No patches at ${path.join(project, 'missing.tar.gz')}.\n\nHow to fix:\n    Check the path.`
+        )
     )
     assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
   })

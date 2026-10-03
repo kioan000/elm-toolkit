@@ -16,12 +16,18 @@
   "files": [
     "dist",
     "index.ts",
+    "cli-error.ts",
+    "cli-success.ts",
+    "layout.ts",
+    "maybe.ts",
+    "result.ts",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "prepare": "yarn build"
+    "prepare": "yarn build",
+    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "typescript": "^6.0.3"
