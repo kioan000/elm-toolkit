@@ -56,8 +56,12 @@ export type ElmKernelPatcherPluginOptions = {
    * yarn set when they run a script, and then to the current directory.
    */
   elmJsonFolder?: string
-  /** Whether to extract patches from the archive (default: true). */
-  useArchive?: boolean
+  /**
+   * Patches of your own: a `.tar.gz` archive of a `patches/` folder, or the
+   * folder itself, relative to the folder that holds `elm.json`. Without it, the
+   * archive of `@elm-toolkit/cli-elm-kernel-patcher` is used.
+   */
+  patches?: string
 } & (
   | {
       elmHome?: ElmHome
@@ -99,8 +103,8 @@ export type ElmKernelPatcherPluginOptions = {
  * ```
  */
 export default class ElmKernelPatcherPlugin {
-  /** Resolved plugin configuration with defaults applied */
-  private readonly options: ElmKernelPatcherPluginOptions & { useArchive: boolean }
+  /** The plugin configuration, as the caller gave it */
+  private readonly options: ElmKernelPatcherPluginOptions
 
   /**
    * Creates a new instance of the Elm kernel replacement plugin
@@ -108,7 +112,7 @@ export default class ElmKernelPatcherPlugin {
    * @param options - plugin configuration options
    */
   public constructor(options: ElmKernelPatcherPluginOptions) {
-    this.options = { ...options, useArchive: options.useArchive ?? true }
+    this.options = options
   }
 
   /**
@@ -134,7 +138,7 @@ export default class ElmKernelPatcherPlugin {
 
         useElmHome(this.options.elmHome, this.options.elmJsonFolder)
 
-        const args = prepareArgs(this.options.useArchive, this.options.elmJsonFolder)
+        const args = prepareArgs({ elmJsonFolder: this.options.elmJsonFolder, patches: this.options.patches })
         replaceKernelPackages(args)
       } catch (error: unknown) {
         prettyError(`[${PLUGIN_NAME}]`, 'Elm kernel patching failed')

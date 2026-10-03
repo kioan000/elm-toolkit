@@ -42,12 +42,18 @@ in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 ## Usage
 
 ```sh
-cli-elm-kernel-patcher [--useArchive <bool>] [--elmJsonFolder <path>]
+cli-elm-kernel-patcher [--patches <path>] [--elmJsonFolder <path>]
 ```
 
-`--useArchive` defaults to `true`. The tool then extracts the patch archive that
-ships with the package, applies the patches, and removes the extracted folder
-afterwards. Set it to `false` when you keep a `patches/` directory of your own.
+Without `--patches`, the tool uses the patch archive that ships with the
+package. It extracts the archive into a temporary folder, applies the patches,
+and removes the folder afterwards.
+
+`--patches` names patches of your own: a `.tar.gz` archive of a `patches/`
+folder, or that folder itself. A relative path starts from the folder that
+holds `elm.json`. Inside `patches/`, each package sits at
+`<author>/<package>/<version>/`, with its `elm.json`, its `src` and a
+`source.txt` file. An archive is made with `tar -czf patches.tar.gz patches`.
 
 `--elmJsonFolder` is the folder that holds the project's `elm.json`. It defaults
 to `INIT_CWD`, which npm and yarn set when they run a script, and falls back to
@@ -61,10 +67,14 @@ README of `@elm-toolkit/webpack-elm-kernel-patcher-plugin` shows a setup.
 ## What it does
 
 The tool first reads `elm-version` from `elm.json` and checks it against the
-versions the patches support, Elm 0.19.1 and 0.19.2. It stops on any other
-version before it changes anything. Elm keeps its packages and its cache in
-folders named after the version, so the version also decides where the tool
-writes.
+Elm versions it supports today, 0.19.1 and 0.19.2. It stops on any other
+version before it changes anything. This is a safety measure. The patcher
+expects a specific folder structure in the Elm home, and another Elm version
+may change it.
+
+With patches of your own, this check is skipped. Each patched package still
+carries its own version, and it must match the version that `elm.json` pins.
+So a patch never applies to another version of a kernel package.
 
 A new Elm version is supported by adding it to that list in `lib/patcher.ts`,
 together with the patch archive it needs. Today both versions use the same
@@ -91,13 +101,19 @@ the command line interface.
 ```ts
 import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
 
-replaceKernelPackages(prepareArgs(true))
+replaceKernelPackages(
+  prepareArgs({
+    elmJsonFolder: 'yourprj/frontend',
+    patches: 'kernel-patches/patches.tar.gz',
+  })
+)
 ```
 
 ## Requirements
 
-Node 24, an Elm 0.19.1 or 0.19.2 project with a valid `elm.json`, and `tar` on the `PATH`
-when the archive mode is used.
+Node 24, an Elm project with a valid `elm.json`, and `tar` on the `PATH` when the
+patches come from an archive. With the bundled patches, the project uses Elm
+0.19.1 or 0.19.2.
 
 The package installs one executable, which runs the compiled JavaScript in
 `dist/`. Node refuses to strip TypeScript types from files under `node_modules`,

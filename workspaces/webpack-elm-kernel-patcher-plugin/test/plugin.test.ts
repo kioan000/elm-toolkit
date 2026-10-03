@@ -33,7 +33,7 @@ const patchedVersions = {
 // The Elm versions that the patcher supports.
 const supportedElmVersions = ['0.19.1', '0.19.2']
 
-// The patcher extracts its archive next to its own module, inside the installed package.
+// The patcher once extracted its archive here, inside the installed package, which can be read only.
 const extractedPatches = path.join(
   path.dirname(fileURLToPath(import.meta.resolve('@elm-toolkit/cli-elm-kernel-patcher/patcher'))),
   'patches'
@@ -69,6 +69,23 @@ function writeElmJson(versions: Record<string, string>, elmVersion = '0.19.1'): 
  */
 function createCompiler(plugin: ElmKernelPatcherPlugin): void {
   createWebpackCompiler({ context: project, entry: './src/index.js', mode: 'none', plugins: [plugin] })
+}
+
+/**
+ * Writes a set of patches of one's own into the project, with only `elm/html`
+ * inside. The patcher copies the files and never compiles them, so a record of
+ * the source is enough.
+ *
+ * @param source - the text of the `source.txt` record
+ * @returns the path of the `patches` folder, relative to the project
+ */
+function writeOwnPatches(source: string): string {
+  const packageFolder = path.join(project, 'kernel', 'patches', 'elm', 'html', '1.0.1')
+
+  mkdirSync(packageFolder, { recursive: true })
+  writeFileSync(path.join(packageFolder, 'source.txt'), source)
+
+  return path.join('kernel', 'patches')
 }
 
 /**
@@ -288,6 +305,53 @@ describe('ElmKernelPatcherPlugin', () => {
       // @ts-expect-error elmHome is required unless isEnabled is false; plain JavaScript can still leave it out.
       () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
       /The plugin is enabled but elmHome is missing; set it to 'default' or to a folder\./
+    )
+    assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
+  })
+
+  it('uses a patches folder of its own, relative to the elm.json folder', () => {
+    writeElmJson({ 'elm/html': '1.0.1' })
+    const patches = writeOwnPatches('https://example.org/html/folder')
+
+    createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches }))
+
+    assert.equal(readFileSync(sourceRecord('elm/html', '0.19.1'), 'utf8'), 'https://example.org/html/folder')
+    assert.equal(existsSync(sourceRecord('elm/core', '0.19.1')), false, 'only the given patches should be copied')
+  })
+
+  it('uses a patch archive of its own, and leaves nothing extracted', () => {
+    writeElmJson({ 'elm/html': '1.0.1' })
+    writeOwnPatches('https://example.org/html/archive')
+    execFileSync('tar', ['-czf', 'patches.tar.gz', 'patches'], { cwd: path.join(project, 'kernel') })
+    rmSync(path.join(project, 'kernel', 'patches'), { recursive: true })
+
+    createCompiler(
+      new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches: 'kernel/patches.tar.gz' })
+    )
+
+    assert.equal(readFileSync(sourceRecord('elm/html', '0.19.1'), 'utf8'), 'https://example.org/html/archive')
+    assert.deepEqual(readdirSync(path.join(project, 'kernel')), ['patches.tar.gz'])
+    assert.equal(existsSync(extractedPatches), false)
+  })
+
+  it('accepts an Elm version outside the bundled ones with patches of its own', () => {
+    writeElmJson({ 'elm/html': '1.0.1' }, '0.19.0')
+    const patches = writeOwnPatches('https://example.org/html/0.19.0')
+
+    createCompiler(new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches }))
+
+    assert.ok(existsSync(sourceRecord('elm/html', '0.19.0')))
+  })
+
+  it('stops webpack, before touching anything, when the given patches do not exist', () => {
+    writeElmJson(patchedVersions)
+
+    assert.throws(
+      () =>
+        createCompiler(
+          new ElmKernelPatcherPlugin({ elmHome, elmJsonFolder: project, isEnabled: true, patches: 'missing.tar.gz' })
+        ),
+      (thrown) => thrown instanceof Error && thrown.message === `No patches at ${path.join(project, 'missing.tar.gz')}.`
     )
     assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
   })

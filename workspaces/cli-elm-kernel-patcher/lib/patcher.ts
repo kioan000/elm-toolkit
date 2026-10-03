@@ -10,6 +10,10 @@
  * the patching. Keeping the two apart makes the resolved paths visible before
  * anything is written to disk.
  *
+ * The patches come from the archive inside this package unless the caller names
+ * other ones: an archive of a `patches/` folder, or such a folder itself. Inside
+ * it, each package sits at `<author>/<package>/<version>/`.
+ *
  * @packageDocumentation
  */
 
@@ -33,59 +37,103 @@ const patchArchives: Readonly<Record<string, string>> = {
 }
 
 /**
+ * Chooses the project and the patches for one run of `prepareArgs`.
+ *
+ * @example
+ *
+ * Patch a project in a subfolder with an archive of your own
+ * ```TypeScript
+ *   const options: PatchOptions = { elmJsonFolder: 'frontend', patches: 'kernel/patches.tar.gz' }
+ * ```
+ */
+export type PatchOptions = {
+  /**
+   * The folder that holds `elm.json`. It defaults to `INIT_CWD`, which npm and
+   * yarn set when they run a script, and then to the current directory.
+   */
+  elmJsonFolder?: string
+  /**
+   * Patches of your own: a `.tar.gz` archive of a `patches/` folder, or the
+   * folder itself. A relative path starts from the folder that holds `elm.json`.
+   * Without it, the archive inside this package is used.
+   */
+  patches?: string
+}
+
+/**
  * Resolves every path the patching depends on, so a caller can inspect them
  * before any file is touched.
  *
  * The Elm home comes from `ELM_HOME` when it is set, and from the user home
- * directory otherwise. The project folder falls back to `INIT_CWD`, which npm and
- * yarn set when they run a script, and then to the current working directory.
+ * directory otherwise.
  *
  * The Elm version comes from `elm-version` in the project's `elm.json`. Elm keeps
- * its packages and its cache in folders named after that version, and each
- * supported version has its own patch archive, so every path depends on it.
+ * its packages and its cache in folders named after that version, so every path
+ * depends on it. With the patches of this package, a version they do not support
+ * is refused. With patches of your own, any version is accepted, and the check of
+ * each package version against `elm.json` still protects the Elm home.
  *
  * @example
  *
  * Patch the project in the current folder using the bundled archive
  * ```TypeScript
- *   replaceKernelPackages(prepareArgs(true))
+ *   replaceKernelPackages(prepareArgs())
  * ```
  *
- * @param useArchive - true to extract the bundled archive, false to read a `patches/` folder
- * @param elmJsonFolder - the folder holding the project's `elm.json`
- * @returns the resolved paths and options, ready for `replaceKernelPackages`
- * @throws Error when `elm.json` cannot be read, or when it declares an Elm version
- * that the patches do not support
+ * @param options - the project folder and the patches to use, both optional
+ * @returns the resolved paths, ready for `replaceKernelPackages`
+ * @throws Error when `elm.json` cannot be read, when it declares an Elm version
+ * that the bundled patches do not support, or when the given patches do not exist
  */
-export function prepareArgs(useArchive: boolean, elmJsonFolder?: string): ReplaceKernelArgs {
-  const ROOT = elmJsonFolder ?? process.env.INIT_CWD ?? process.cwd()
-  const CURRENT = __dirname
-  const ELM_VERSION = readElmVersion(path.join(ROOT, 'elm.json'))
+export function prepareArgs(options: PatchOptions = {}): ReplaceKernelArgs {
+  const ROOT = options.elmJsonFolder ?? process.env.INIT_CWD ?? process.cwd()
+  const ELM_VERSION = readElmVersion(path.join(ROOT, 'elm.json'), options.patches === undefined)
   const ELM_HOME = process.env.ELM_HOME || path.join(os.homedir(), '.elm')
   const ELM_HOME_PACKAGES = path.join(ELM_HOME, ELM_VERSION, 'packages')
+  const PATCHES =
+    options.patches === undefined
+      ? path.join(__dirname, patchArchives[ELM_VERSION])
+      : findPatches(path.resolve(ROOT, options.patches))
 
   return {
-    CURRENT: CURRENT,
     ELM_HOME: ELM_HOME,
     ELM_HOME_PACKAGES: ELM_HOME_PACKAGES,
     ELM_VERSION: ELM_VERSION,
-    PATCH_ARCHIVE: path.join(CURRENT, patchArchives[ELM_VERSION]),
-    PATCH_DIR: path.join(CURRENT, 'patches'),
+    PATCHES: PATCHES,
     PROJECT_ELM_ROOT: ROOT,
     PROJECT_ELM_STUFF: path.join(ROOT, 'elm-stuff', ELM_VERSION),
-    USE_ARCHIVE: useArchive,
   }
 }
 
 /**
- * Reads the Elm version that a project declares, and stops on one that the
- * patches do not support, before any path is resolved or any file touched.
+ * Checks that the patches a caller named exist, before any file is touched.
+ *
+ * @param patches - the absolute path of the archive or of the folder
+ * @returns the same path
+ * @throws Error when nothing exists at that path
+ */
+function findPatches(patches: string): string {
+  if (!fs.existsSync(patches)) {
+    prettyError('patches finding', 'the given patches do not exist')
+    console.info(indent(`path: ${patches}`))
+
+    throw new Error(`No patches at ${patches}.`)
+  }
+
+  return patches
+}
+
+/**
+ * Reads the Elm version that a project declares. With the bundled patches it
+ * also stops on a version they do not support, before any path is resolved or
+ * any file touched.
  *
  * @param elmJsonPath - path to the project's `elm.json`
- * @returns the declared version, one of the keys of `patchArchives`
+ * @param bundledPatches - true when the patches come from this package
+ * @returns the declared version; with the bundled patches, one of the keys of `patchArchives`
  * @throws Error when `elm.json` cannot be read, or when its version is not supported
  */
-function readElmVersion(elmJsonPath: string): string {
+function readElmVersion(elmJsonPath: string, bundledPatches: boolean): string {
   let elmVersion: unknown
 
   try {
@@ -99,7 +147,7 @@ function readElmVersion(elmJsonPath: string): string {
     throw new Error(`Failed to read elm.json: ${cause}`)
   }
 
-  if (typeof elmVersion !== 'string' || !Object.hasOwn(patchArchives, elmVersion)) {
+  if (typeof elmVersion !== 'string' || (bundledPatches && !Object.hasOwn(patchArchives, elmVersion))) {
     const supported = Object.keys(patchArchives)
 
     prettyError('elm version checking', 'the project uses a version that the patches do not support')
@@ -132,15 +180,12 @@ function indent(text: string): string {
  * which folders a run is about to read and write.
  */
 export type ReplaceKernelArgs = {
-  CURRENT: string
   ELM_HOME: string
   ELM_HOME_PACKAGES: string
   ELM_VERSION: string
-  PATCH_ARCHIVE: string
-  PATCH_DIR: string
+  PATCHES: string
   PROJECT_ELM_ROOT: string
   PROJECT_ELM_STUFF: string
-  USE_ARCHIVE: boolean
 }
 
 /**
@@ -159,7 +204,7 @@ export type ReplaceKernelArgs = {
  *
  * Apply the bundled patches to the current project
  * ```TypeScript
- *   replaceKernelPackages(prepareArgs(true))
+ *   replaceKernelPackages(prepareArgs())
  * ```
  *
  * @param args - the resolved paths and options from `prepareArgs`
@@ -178,19 +223,21 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
     throw new Error(`Failed to parse elm.json: ${error instanceof Error ? error.message : String(error)} `)
   }
 
-  // The archive is extracted inside the installed package, so the folder must go on every path,
-  // also when the extraction itself fails halfway and leaves part of it behind.
-  try {
-    if (args.USE_ARCHIVE) {
-      prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCH_ARCHIVE)
-      childProcess.execFileSync('tar', ['-xzf', args.PATCH_ARCHIVE, '-C', args.CURRENT])
-    }
+  if (fs.statSync(args.PATCHES).isDirectory()) {
+    applyPatches(args.PATCHES, args, elmJsonDependencies)
+  } else {
+    // A temporary folder, because the installed package can be read only. It goes on every path,
+    // also when the extraction fails halfway and leaves part of the archive behind.
+    const extracted = fs.mkdtempSync(path.join(os.tmpdir(), 'elm-kernel-patches-'))
 
-    applyPatches(args, elmJsonDependencies)
-  } finally {
-    if (args.USE_ARCHIVE) {
-      prettyInfo('> Running: ', "I'm removing the unarchived patch folder:", args.PATCH_DIR)
-      fs.rmSync(args.PATCH_DIR, { force: true, recursive: true })
+    try {
+      prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCHES)
+      childProcess.execFileSync('tar', ['-xzf', args.PATCHES, '-C', extracted])
+
+      applyPatches(path.join(extracted, 'patches'), args, elmJsonDependencies)
+    } finally {
+      prettyInfo('> Running: ', "I'm removing the unarchived patch folder:", extracted)
+      fs.rmSync(extracted, { force: true, recursive: true })
     }
   }
 
@@ -201,15 +248,16 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
  * Checks each extracted patched package against the versions that `elm.json` pins,
  * then copies the packages into `ELM_HOME` when the copy there is out of date.
  *
+ * @param patchDir - the folder that holds the patched packages, by author
  * @param args - the resolved paths and options from `prepareArgs`
  * @param elmJsonDependencies - the package names mapped to the versions the project pins
  * @throws Error when a version does not match the pinned one, or when a patched
  * package holds more than one version
  */
-function applyPatches(args: ReplaceKernelArgs, elmJsonDependencies: Record<string, string>): void {
+function applyPatches(patchDir: string, args: ReplaceKernelArgs, elmJsonDependencies: Record<string, string>): void {
   let alreadyUpToDate = true
 
-  for (const user of readDir(args.PATCH_DIR)) {
+  for (const user of readDir(patchDir)) {
     for (const package_ of readDir(user.path)) {
       const versions = readDir(package_.path)
       if (versions.length !== 1) {
@@ -270,7 +318,7 @@ function applyPatches(args: ReplaceKernelArgs, elmJsonDependencies: Record<strin
 
   if (!alreadyUpToDate) {
     prettyInfo('> Running: ', 'Patching elm packages in: ', args.ELM_HOME_PACKAGES)
-    fs.cpSync(args.PATCH_DIR, args.ELM_HOME_PACKAGES, { recursive: true })
+    fs.cpSync(patchDir, args.ELM_HOME_PACKAGES, { recursive: true })
     // Force Elm to recompile everything:
     prettyInfo('> Running: ', 'Invalidate cache fingerprint for: ', args.PROJECT_ELM_STUFF)
     fs.rmSync(args.PROJECT_ELM_STUFF, { force: true, recursive: true })

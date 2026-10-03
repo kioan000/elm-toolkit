@@ -51,18 +51,20 @@ function command(): Command {
     .description('This scripts changes your current ELM_HOME folder with a given set of kernel patches')
     .version(readPackageJson(import.meta.url).version)
   program
-    .option('--useArchive <type>', 'Whether or not use the patches archive as source of truth, true is default', 'true')
+    .option(
+      '--patches <path>',
+      'A .tar.gz archive of a patches/ folder, or the folder itself; the archive of this package is the default'
+    )
     .option(
       '--elmJsonFolder <type>',
       'Your project folder where elm.json stands, if not specified current working dir is used instead'
     )
-    .action(({ elmJsonFolder, useArchive }) => {
+    .action(({ elmJsonFolder, patches }) => {
       try {
-        const parsed = JSON.parse(useArchive)
-        const USE_ARCHIVE: boolean = typeof parsed === 'boolean' ? parsed : true
         const ELM_JSON_FOLDER = elmJsonFolder ? String(elmJsonFolder) : undefined
+        const PATCHES = patches ? String(patches) : undefined
 
-        const args = Patcher.prepareArgs(USE_ARCHIVE, ELM_JSON_FOLDER)
+        const args = Patcher.prepareArgs({ elmJsonFolder: ELM_JSON_FOLDER, patches: PATCHES })
         Patcher.replaceKernelPackages(args)
       } catch (e) {
         prettyError('Patching failed', e)

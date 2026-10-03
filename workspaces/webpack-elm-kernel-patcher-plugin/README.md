@@ -36,9 +36,10 @@ mode included, is complete. When it is `false`, the plugin does nothing.
 `elmHome` says where the patched packages go, and it is required unless
 `isEnabled` is `false`. The next section explains why.
 
-`useArchive` defaults to `true`, and then the patches come from the archive
-inside the patcher package. Set it to `false` to use a `patches/` directory of
-your own.
+`patches` names patches of your own: a `.tar.gz` archive of a `patches/`
+folder, or that folder itself, relative to the folder that holds `elm.json`.
+Without it, the patches come from the archive inside the patcher package. The
+README of `@elm-toolkit/cli-elm-kernel-patcher` describes the layout.
 
 `elmJsonFolder` is the folder that holds `elm.json`. It defaults to `INIT_CWD`,
 which npm and yarn set when they run a script, and falls back to the current
