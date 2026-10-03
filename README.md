@@ -134,15 +134,21 @@ left side of the map and `types` and `default` on the right.
 
 ### Making a release
 
-Set the new versions in the manifests, merge them into `main`, then tag that
-commit and push the tag:
+Every pull request that changes a published package adds a line under
+`Unreleased` in [CHANGELOG.md](CHANGELOG.md). To release, rename that section to
+the new version and the date, add an empty `Unreleased` above it, and update the
+links at the bottom of the file. Set the new versions in the manifests, merge
+both changes into `main`, then tag that commit and push the tag:
 
 ```sh
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The release workflow runs the same checks as a pull request, packs every public
-workspace, and publishes a GitHub release with the archives.
+workspace, and publishes a GitHub release with the archives. The notes of the
+release are the section of the changelog for that version, followed by the list
+of pull requests. A tag whose version has no section in the changelog stops the
+workflow before anything is published.
 
 A version with a hyphen, such as `0.1.0-alpha.1`, is a pre-release. Give the
 manifests and the tag the same version, `v0.1.0-alpha.1` in that case, and
