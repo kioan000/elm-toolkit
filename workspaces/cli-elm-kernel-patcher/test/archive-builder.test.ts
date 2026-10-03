@@ -13,6 +13,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { gunzipSync } from 'node:zlib'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, it, mock } from 'node:test'
 import assert from 'node:assert/strict'
@@ -117,6 +118,37 @@ function archiveFiles(file: string): string[] {
     .sort()
 }
 
+/**
+ * Lists the names inside a .tar.gz archive by reading its headers, without the
+ * tar of the system, which on macOS hides AppleDouble entries.
+ *
+ * @param file - the archive
+ * @returns the name of every entry, in the order of the archive
+ */
+function entryNames(file: string): string[] {
+  const data = gunzipSync(readFileSync(file))
+  const names: string[] = []
+
+  for (let offset = 0; offset + 512 <= data.length && data[offset] !== 0;) {
+    const name = data
+      .subarray(offset, offset + 100)
+      .toString('utf8')
+      .replace(/\0.*$/s, '')
+    const size = Number.parseInt(
+      data
+        .subarray(offset + 124, offset + 136)
+        .toString('utf8')
+        .trim() || '0',
+      8
+    )
+
+    names.push(name)
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+
+  return names
+}
+
 describe('the archive builder', () => {
   beforeEach(() => {
     work = mkdtempSync(path.join(tmpdir(), 'archive-builder-'))
@@ -168,6 +200,19 @@ describe('the archive builder', () => {
     assert.equal(
       readFileSync(path.join(extracted, 'patches/elm/html/1.0.1/source.txt'), 'utf8'),
       `${fork.folder}#${fork.commit}`
+    )
+  })
+
+  it('writes no AppleDouble entries, which Linux would extract as files', () => {
+    const fork = createFork('elm/html')
+
+    writeManifest([{ commit: fork.commit, git: fork.folder, packageName: 'elm/html' }])
+    buildArchive({ elmJsonFolder: work })
+
+    assert.deepEqual(
+      entryNames(archive).filter((name) => path.basename(name).startsWith('._')),
+      [],
+      'the archive should hold no AppleDouble entries'
     )
   })
 

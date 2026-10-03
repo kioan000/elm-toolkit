@@ -148,7 +148,11 @@ export function buildArchive(options: ArchiveOptions = {}): Result<CliError, str
       writePatches(entries, path.join(work, 'patches')).andThen((packages) =>
         Result.fromAttempt(() => {
           fs.mkdirSync(path.dirname(archive), { recursive: true })
-          execFileSync('tar', ['-czf', archive, '-C', work, 'patches'], { stdio: 'pipe' })
+          // macOS tar adds an AppleDouble file, ._name, for each file with extended attributes; Linux would extract them.
+          execFileSync('tar', ['-czf', archive, '-C', work, 'patches'], {
+            env: { ...process.env, COPYFILE_DISABLE: '1' },
+            stdio: 'pipe',
+          })
 
           return packages
         }).mapError((caught) => CliError.fromUnknown(`tar could not write ${shown(archive)}`, caught))
