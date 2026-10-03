@@ -184,9 +184,8 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
   })
 
   it('ships the hot reload runtime that the loader reads', () => {
-    // The runtime is copied into dist by the build script, outside tsc, so only an installed
-    // package shows whether it arrived. A stand-in compiler writes the smallest text that ends
-    // like Elm output, and a development build makes the loader add the runtime to it.
+    // The build copies the runtime outside tsc, so only an installed package shows that it arrived.
+    // A stand-in compiler writes the smallest Elm output, and development mode adds the runtime.
     const injected = runInConsumer(`
       import { chmodSync, writeFileSync } from 'node:fs'
       const loader = await import('@elm-toolkit/webpack-elm-loader')

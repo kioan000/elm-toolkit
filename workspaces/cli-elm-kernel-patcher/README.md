@@ -16,12 +16,24 @@ The patches are not ours. They come from the patched Elm kernel packages that
 `elm/virtual-dom`, `elm/browser` and `elm/html`. All credit for that work belongs
 there.
 
-The `elm/core`, `elm/browser` and `elm/virtual-dom` sources come from the
-branches of [elm/core#1155](https://github.com/elm/core/pull/1155) and its
-companion pull requests, which are still open. That `elm/core` reloads itself in
-a development build, through `Elm.hot.reload()`, and the loader of
-`@elm-toolkit/webpack-elm-loader` uses it when it is there. A production build,
-made with `--optimize`, does not include that code.
+The shipped patches contain these changes:
+
+- `elm/core` from [elm/core#1155](https://github.com/elm/core/pull/1155), which
+  adds hot reloading and a way to stop a running mvu app;
+- `elm/browser` from [lydell/browser#1](https://github.com/lydell/browser/pull/1),
+  which lets `Browser.element`, `Browser.document` and `Browser.application`
+  reload and stop, together with the debugger. It also draws the first view at
+  the right time, so a web component that sends an event while it renders no
+  longer crashes Elm;
+- `elm/virtual-dom` from
+  [lydell/virtual-dom#1](https://github.com/lydell/virtual-dom/pull/1), which
+  does the same for a program that is only a view, and removes the event
+  listeners of a stopped app, so another Elm app can use the same DOM node.
+
+The `elm/core` patch adds a dedicated API, `Elm.hot.reload()`, which a hot
+reloading tool can call.
+
+**A production build, made with `--optimize`, does not include that code.**
 
 This package only carries those sources and applies them safely. Every patched
 package includes a `source.txt` file that records the exact upstream commit its

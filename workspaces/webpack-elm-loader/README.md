@@ -25,14 +25,23 @@ export default {
 }
 ```
 
-The build uses `--debug` in development mode and `--optimize` in production
-mode. The options can change both, and they accept every option of
-`@elm-toolkit/node-elm-compiler`, for example `pathToElm`.
+Every option is optional.
 
-`elmHome` sets the `ELM_HOME` that the compiler uses, relative to `cwd`. Without
-it, the compiler uses the `ELM_HOME` of the environment, or `~/.elm` when that is
-not set. When `@elm-toolkit/webpack-elm-kernel-patcher-plugin` patches an Elm
-home of its own, give the loader the same folder.
+| Option                 | Default                       | What it does                                                                                                                                                                                                                     |
+| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cwd`                  | the directory of the process  | The folder where Elm runs. Elm looks for `elm.json` there and in the folders above it, so set it when the Elm project is not at the root. In watch mode it also adds `elm.json` and the source directories to the watched files. |
+| `debug`                | `true` in development mode    | Adds the Elm debugger, with `--debug`.                                                                                                                                                                                           |
+| `optimize`             | `true` in production mode     | Builds with `--optimize`.                                                                                                                                                                                                        |
+| `hotModuleReplacement` | `true` in development mode    | Adds hot module replacement to the output. The next section explains it.                                                                                                                                                         |
+| `elmHome`              | the `ELM_HOME` of the process | The `ELM_HOME` of the compiler, relative to `cwd`. Without it, Elm uses the `ELM_HOME` of the environment, or `~/.elm`. When a tool patches the kernel packages in an Elm home of its own, give the loader the same folder.      |
+| `files`                | the requested module          | A list of modules to compile into one bundle, instead of the module that webpack asks for.                                                                                                                                       |
+| `pathToElm`            | `elm` on the `PATH`           | The Elm binary to run, for example `node_modules/.bin/elm`.                                                                                                                                                                      |
+| `report`               | none                          | Passed to `--report`, for example `json`.                                                                                                                                                                                        |
+| `runtimeOptions`       | none                          | Options for the runtime of the compiler, passed between `+RTS` and `-RTS`.                                                                                                                                                       |
+| `verbose`              | `false`                       | Prints the command before it runs.                                                                                                                                                                                               |
+
+The options can also come from a query string, for example
+`@elm-toolkit/webpack-elm-loader?debug=false`.
 
 In watch mode the loader reports every local module that the entry imports, so a
 change in any of them starts a new build. With `cwd`, it also watches `elm.json`
@@ -45,9 +54,29 @@ The `hotModuleReplacement` option changes that default: `false` turns it off,
 for example when another loader already adds it, and `true` turns it on in any
 mode.
 
+```js
+export default (env, { mode }) => ({
+  module: {
+    rules: [
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        use: {
+          loader: '@elm-toolkit/webpack-elm-loader',
+          // The same as the default; set it to false to turn hot module replacement off.
+          options: { cwd: import.meta.dirname, hotModuleReplacement: mode === 'development' },
+        },
+      },
+    ],
+  },
+  devServer: { hot: true },
+})
+```
+
 The added code runs only when `module.hot` exists, which means under the
 development server with hot module replacement enabled. In other development
-builds it does nothing, and it only makes the bundle larger.
+builds it does nothing, and it only makes the bundle larger: about 18 KB, or
+5 KB after gzip, against about 270 KB for a small program with the debugger.
 
 The runtime in `hot/runtime.js` is the one from `elm-hot`, under its MIT
 license. It is injected as text into the compiled Elm code, so it is not linted
@@ -56,8 +85,7 @@ or formatted with the rest of the repository.
 An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
 reloads itself: a development build offers `Elm.hot.reload()`. When that is
 there, the loader passes each new version of the code to it, and the elm-hot
-runtime stays off. Otherwise the elm-hot runtime does the work, as before. The
-patched kernel comes from `@elm-toolkit/webpack-elm-kernel-patcher-plugin`.
+runtime stays off. Otherwise the elm-hot runtime does the work, as before.
 
 ## Compatibility
 
