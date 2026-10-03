@@ -83,7 +83,7 @@ export default class ElmKernelPatcherPlugin {
   private readonly options: ElmKernelPatcherPluginOptions
 
   /**
-   * Creates a new instance of the Elm kernel replacement plugin
+   * Creates a new instance of the Elm kernel patcher plugin
    *
    * @param options - plugin configuration options
    */

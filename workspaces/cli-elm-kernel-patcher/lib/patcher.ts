@@ -233,6 +233,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   }
 
   if (fs.statSync(args.PATCHES).isDirectory()) {
+    checkLayout(args.PATCHES, args.PATCHES)
     applyPatches(args.PATCHES, args, elmJsonDependencies)
   } else {
     // A temporary folder, because the installed package can be read only. It goes on every path,
@@ -243,6 +244,7 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
       prettyInfo('> Running:', "I'll un-archive patch folder:", args.PATCHES)
       childProcess.execFileSync('tar', ['-xzf', args.PATCHES, '-C', extracted])
 
+      checkLayout(path.join(extracted, 'patches'), args.PATCHES)
       applyPatches(path.join(extracted, 'patches'), args, elmJsonDependencies)
     } finally {
       prettyInfo('> Running: ', "I'm removing the unarchived patch folder:", extracted)
@@ -251,6 +253,41 @@ export function replaceKernelPackages(args: ReplaceKernelArgs): void {
   }
 
   prettyInfo('> Done: ', 'Finished successfully\n')
+}
+
+/**
+ * Checks that a patch folder holds `<author>/<package>/<version>/source.txt`
+ * for every package, before anything is copied. Without this check, patches of
+ * one's own in another layout fail later with an error about a missing file.
+ *
+ * @param patchDir - the folder that should hold the patched packages, by author
+ * @param origin - the archive or the folder that the caller gave, for the message
+ * @throws Error when the folder is missing, empty, or in another layout
+ */
+function checkLayout(patchDir: string, origin: string): void {
+  const isFolder = (folder: string): boolean => fs.existsSync(folder) && fs.statSync(folder).isDirectory()
+  const versions = isFolder(patchDir)
+    ? readDir(patchDir)
+        .filter((author) => isFolder(author.path))
+        .flatMap((author) => readDir(author.path))
+        .filter((package_) => isFolder(package_.path))
+        .flatMap((package_) => readDir(package_.path))
+    : []
+
+  if (versions.length > 0 && versions.every((version) => fs.existsSync(path.join(version.path, 'source.txt')))) {
+    return
+  }
+
+  prettyError('patches reading', 'the patches do not follow the expected layout')
+  console.info(
+    indent(
+      `patches: ${origin}\n` +
+        'expected: <author>/<package>/<version>/source.txt, for example elm/core/1.0.5/source.txt\n' +
+        'an archive holds a patches/ folder at the top: tar -czf patches.tar.gz patches'
+    )
+  )
+
+  throw new Error(`The patches at ${origin} do not follow the layout <author>/<package>/<version>/source.txt.`)
 }
 
 /**
