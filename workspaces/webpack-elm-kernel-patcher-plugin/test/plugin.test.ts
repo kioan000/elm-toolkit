@@ -337,6 +337,34 @@ describe('ElmKernelPatcherPlugin', () => {
     assert.equal(existsSync(extractedPatches), false)
   })
 
+  it('stops webpack when an archive of its own has no patches folder at the top', () => {
+    writeElmJson({ 'elm/html': '1.0.1' })
+    writeOwnPatches('https://example.org/html/flat')
+    // Made from inside the folder, so the archive starts with elm/ instead of patches/.
+    execFileSync('tar', ['-czf', '../flat.tar.gz', 'elm'], { cwd: path.join(project, 'kernel', 'patches') })
+
+    assert.throws(
+      () =>
+        createCompiler(
+          new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches: 'kernel/flat.tar.gz' })
+        ),
+      /kernel\/flat\.tar\.gz do not follow the layout <author>\/<package>\/<version>\/source\.txt\./
+    )
+    assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
+  })
+
+  it('stops webpack when a folder of its own is in another layout', () => {
+    writeElmJson({ 'elm/html': '1.0.1' })
+    writeOwnPatches('https://example.org/html/parent')
+
+    // The folder above patches/ adds one level, so the versions are not where the patcher looks.
+    assert.throws(
+      () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true, patches: 'kernel' })),
+      /do not follow the layout/
+    )
+    assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
+  })
+
   it('accepts an Elm version outside the bundled ones with patches of its own', () => {
     writeElmJson({ 'elm/html': '1.0.1' }, '0.19.0')
     const patches = writeOwnPatches('https://example.org/html/0.19.0')
