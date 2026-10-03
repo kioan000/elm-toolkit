@@ -34,10 +34,11 @@ mode included, is complete. When it is `false`, the plugin does nothing.
 `elm.json`. Without it, the plugin patches the `ELM_HOME` of the environment,
 or `~/.elm` when that is not set. The next section explains when to set it.
 
-`patches` names patches of your own: a `.tar.gz` archive of a `patches/`
-folder, or that folder itself, relative to the folder that holds `elm.json`.
-Without it, the patches come from the archive inside the patcher package. The
-README of `@elm-toolkit/cli-elm-kernel-patcher` describes the layout.
+`patches` names patches of your own, relative to the folder that holds
+`elm.json`: a patch folder made by `cli-elm-kernel-patcher archive`, a `.tar.gz`
+archive of a `patches/` folder, or that folder itself. Without it, the patches
+come from the archive inside the patcher package. The README of
+`@elm-toolkit/cli-elm-kernel-patcher` describes the forms.
 
 `elmJsonFolder` is the folder that holds `elm.json`. It defaults to `INIT_CWD`,
 which npm and yarn set when they run a script, and falls back to the current

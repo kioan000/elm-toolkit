@@ -84,8 +84,17 @@ export default tseslint.config(
       'import-x/newline-after-import': 'error',
       'import-x/no-deprecated': 'warn',
       'import-x/no-named-as-default-member': 'off',
-      'new-cap': 'error',
+      // Just, Ok and Err keep their Elm names, although they are functions and not classes.
+      'new-cap': [
+        'error',
+        {
+          capIsNewExceptionPattern: '^(Maybe\\.Just|Result\\.Ok|Result\\.Err)$',
+          capIsNewExceptions: ['Err', 'Just', 'Ok'],
+        },
+      ],
       'no-duplicate-imports': 'error',
+      // A switch on the tag of a Maybe or a Result must handle every case, as a case expression in Elm.
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
       'import-x/no-duplicates': 'off',
 
       '@typescript-eslint/no-explicit-any': [

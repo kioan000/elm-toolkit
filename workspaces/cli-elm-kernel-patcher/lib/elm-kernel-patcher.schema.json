@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/kioan000/elm-toolkit/main/workspaces/cli-elm-kernel-patcher/lib/elm-kernel-patcher.schema.json",
+  "title": "elm-kernel-patcher manifest",
+  "description": "The Git commits that a patch archive is built from, one for each patched Elm package. The cli-elm-kernel-patcher archive commands read it.",
+  "type": "object",
+  "required": ["patches"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "description": "The address of this schema, for editors.",
+      "type": "string"
+    },
+    "patches": {
+      "description": "One entry for each package to patch. A package may appear only once; the archive commands check that.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["packageName", "git", "commit"],
+        "additionalProperties": false,
+        "properties": {
+          "packageName": {
+            "description": "The Elm package that the commit replaces, for example elm/core. The elm.json of the commit must declare the same name.",
+            "type": "string",
+            "pattern": "^[a-z0-9-]+/[a-z0-9-]+$"
+          },
+          "git": {
+            "description": "The Git address of the fork. Any server works, and a private repository works with your Git credentials.",
+            "type": "string",
+            "minLength": 1
+          },
+          "commit": {
+            "description": "The full hash of the commit. A branch name or a short hash is refused, because it can point somewhere else later.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "pullRequest": {
+            "description": "Free text for the reader, usually the address of the pull request that explains the change.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

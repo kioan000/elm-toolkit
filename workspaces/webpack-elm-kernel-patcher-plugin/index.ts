@@ -11,8 +11,8 @@
  */
 
 import type { Compiler } from 'webpack'
-import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
-import { prettyError, prettyInfo } from '@elm-toolkit/cli-lib'
+import { patchKernel } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
+import { CliError, prettyError, prettyInfo } from '@elm-toolkit/cli-lib'
 
 const PLUGIN_NAME = 'ElmKernelPatcherPlugin'
 
@@ -48,9 +48,10 @@ export type ElmKernelPatcherPluginOptions = {
   /** Enables the plugin, or decides when webpack starts. */
   isEnabled: boolean | ((compiler: Compiler) => boolean)
   /**
-   * Patches of your own: a `.tar.gz` archive of a `patches/` folder, or the
-   * folder itself, relative to the folder that holds `elm.json`. Without it, the
-   * archive of `@elm-toolkit/cli-elm-kernel-patcher` is used.
+   * Patches of your own, relative to the folder that holds `elm.json`: a patch
+   * folder made by `cli-elm-kernel-patcher archive`, a `.tar.gz` archive of a
+   * `patches/` folder, or the folder itself. Without it, the archive of
+   * `@elm-toolkit/cli-elm-kernel-patcher` is used.
    */
   patches?: string
 }
@@ -61,13 +62,13 @@ export type ElmKernelPatcherPluginOptions = {
  * It hooks into `initialize` so that the patched packages are
  * already in place when `elm-webpack-loader` invokes the Elm compiler.
  *
- * Internally it calls the `replaceKernelPackages` function exported by
+ * Internally it calls the `patchKernel` function exported by
  * `@elm-toolkit/cli-elm-kernel-patcher` directly in-process, avoiding the
  * overhead of spawning a child process on every recompilation.
  *
  * When patching fails, for example because `elm.json` pins a version that the
- * patches do not cover, the plugin prints a short message and throws the error,
- * so webpack does not start.
+ * patches do not cover, the patcher prints the reason, and the plugin throws it
+ * as an error, because that is how a plugin stops webpack.
  *
  * @example
  *
@@ -113,8 +114,15 @@ export default class ElmKernelPatcherPlugin {
         prettyInfo(`[${PLUGIN_NAME}]`, 'Patching Elm kernel packages before compilation…')
 
         const { elmHome, elmJsonFolder, patches } = this.options
-        const args = prepareArgs({ elmHome, elmJsonFolder, patches })
-        replaceKernelPackages(args)
+        const patched = patchKernel({ elmHome, elmJsonFolder, patches })
+
+        switch (patched.tag) {
+          case 'Ok':
+            return
+          case 'Err':
+            // The patcher has printed the reason already; webpack stops only on an exception.
+            throw new Error(CliError.toString(patched.error))
+        }
       } catch (error: unknown) {
         prettyError(`[${PLUGIN_NAME}]`, 'Elm kernel patching failed')
 

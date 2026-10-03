@@ -116,7 +116,32 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
       console.log(Object.keys(patcher).sort().join(','))
     `)
 
-    assert.equal(exported, 'prepareArgs,replaceKernelPackages')
+    assert.equal(exported, 'patchKernel,prepareArgs,replaceKernelPackages')
+  })
+
+  it('ships the manifest that archive init copies, and the archive builder', () => {
+    // The build copies the manifest into dist outside tsc, so only an installed package shows it.
+    const exported = runInConsumer(`
+      const builder = await import('@elm-toolkit/cli-elm-kernel-patcher/archive-builder')
+      console.log(Object.keys(builder).sort().join(','))
+    `)
+
+    // The test itself runs under yarn, whose INIT_CWD would otherwise decide the folder.
+    run(
+      path.join(consumer, 'node_modules/.bin/cli-elm-kernel-patcher'),
+      ['archive', 'init', '--elmJsonFolder', consumer],
+      consumer
+    )
+
+    const written = JSON.parse(
+      readFileSync(path.join(consumer, 'elm-kernel-patcher', 'elm-kernel-patcher.json'), 'utf8')
+    )
+
+    assert.equal(exported, 'archiveName,buildArchive,checkArchive,initManifest,manifestName')
+    assert.ok(
+      written.patches.some((entry: { packageName: string }) => entry.packageName === 'elm/core'),
+      'the copy should hold the patches of the package'
+    )
   })
 
   it('does not run the command when the package is imported', () => {
