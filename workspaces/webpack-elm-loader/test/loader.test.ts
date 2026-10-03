@@ -115,6 +115,23 @@ describe('the Elm loader', () => {
     assert.doesNotMatch(javascript, debuggerDefinition)
   })
 
+  it('adds hot module replacement in development mode only', async () => {
+    assert.match(compiled(await runLoader({ query: inProject })), /HMR BEGIN/)
+    assert.doesNotMatch(compiled(await runLoader({ mode: 'production', query: inProject })), /HMR BEGIN/)
+  })
+
+  it('lets hotModuleReplacement replace the default of the mode', async () => {
+    const off = await runLoader({ query: { ...inProject, hotModuleReplacement: false } })
+    const onInProduction = await runLoader({ mode: 'production', query: { ...inProject, hotModuleReplacement: true } })
+    const offFromQuery = await runLoader({
+      query: `?cwd=${encodeURIComponent(project)}&pathToElm=${encodeURIComponent(inProject.pathToElm)}&hotModuleReplacement=false`,
+    })
+
+    assert.doesNotMatch(compiled(off), /HMR BEGIN/)
+    assert.match(compiled(onInProduction), /HMR BEGIN/)
+    assert.doesNotMatch(compiled(offFromQuery), /HMR BEGIN/)
+  })
+
   it('lets the options replace the defaults of the mode', async () => {
     assert.doesNotMatch(compiled(await runLoader({ query: { ...inProject, debug: false } })), debuggerDefinition)
   })

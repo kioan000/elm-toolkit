@@ -10,6 +10,31 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ### Breaking changes
 
+- **The `./hot` subpath is removed**
+
+  `@elm-toolkit/webpack-elm-loader`: the hot loader no longer exists. The Elm
+  loader adds hot module replacement itself, in development mode.
+
+  **How to fix:** remove the hot loader from `use`.
+
+  ```diff
+  -use: [
+  -  { loader: '@elm-toolkit/webpack-elm-loader/hot' },
+  -  { loader: '@elm-toolkit/webpack-elm-loader', options: { cwd: import.meta.dirname } },
+  -]
+  +use: { loader: '@elm-toolkit/webpack-elm-loader', options: { cwd: import.meta.dirname } }
+  ```
+
+- **Development builds get hot module replacement by default**
+
+  `@elm-toolkit/webpack-elm-loader`: in development mode the output now
+  contains the hot reloading code, also without the hot loader in the
+  configuration.
+
+  **How to fix:** nothing, in most projects, because the code runs only under
+  the development server. To keep the old output, set
+  `hotModuleReplacement: false` in the options of the loader.
+
 - **The plugin is now `ElmKernelPatcherPlugin`**
 
   `@elm-toolkit/webpack-elm-kernel-patcher-plugin`: the class is now
@@ -117,17 +142,14 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   function that receives the webpack compiler.
 - `@elm-toolkit/webpack-elm-loader`: hot module replacement uses
   `Elm.hot.reload()` when the kernel offers it.
+- `@elm-toolkit/webpack-elm-loader`: the `hotModuleReplacement` option, which
+  defaults to the development mode of webpack.
 
 ### Changed
 
 - `@elm-toolkit/cli-elm-kernel-patcher`: an archive is extracted into a
   temporary folder, not inside the installed package, so the patcher works when
   `node_modules` is read only.
-
-### Fixed
-
-- `@elm-toolkit/webpack-elm-loader`: the hot loader listed after the Elm loader
-  stops with a message that says to swap them.
 
 ## [0.1.0-alpha.2] - 2026-10-02
 

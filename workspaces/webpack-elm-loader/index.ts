@@ -7,6 +7,9 @@
  * imports, because webpack cannot read Elm imports on its own and would miss a
  * change in any file but the entry.
  *
+ * In development mode it also adds hot module replacement to the output, through
+ * `hot/inject.ts`, so a change to an Elm file updates the running page.
+ *
  * Read `elmWebpackLoader` first. The helpers above it read the options, compile
  * to a temporary file, and collect the dependencies.
  *
@@ -19,6 +22,8 @@ import * as os from 'node:os'
 import type { LoaderContext } from 'webpack'
 
 import { compile, findAllDependencies } from '@elm-toolkit/node-elm-compiler'
+
+import { inject } from './hot/inject.ts'
 
 /**
  * Result type for promise outcomes.
@@ -34,6 +39,7 @@ interface ElmLoaderOptions {
   debug?: boolean
   elmHome?: string
   files?: string[]
+  hotModuleReplacement?: boolean
   optimize?: boolean
   output?: string
   pathToElm?: string
@@ -121,6 +127,7 @@ function parseLoaderOptions(context: LoaderContext<ElmLoaderOptions>): ElmLoader
 function getOptions(context: LoaderContext<ElmLoaderOptions>, mode: string | undefined): ElmLoaderOptions {
   const defaultOptions: ElmLoaderOptions = {
     debug: mode === 'development',
+    hotModuleReplacement: mode === 'development',
     optimize: mode === 'production',
   }
 
@@ -224,8 +231,10 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
   const outputPath = path.join(tempDir, `elm-output${suffix}`)
 
   return new Promise((resolve, reject) => {
-    // The compiler refuses options it does not know, so elmHome reaches it as ELM_HOME instead.
+    // The compiler refuses options it does not know: elmHome reaches it as ELM_HOME instead,
+    // and hotModuleReplacement belongs to the loader alone.
     const { elmHome, ...compilerOptions } = options
+    delete compilerOptions.hotModuleReplacement
     const env = elmHome === undefined ? {} : { env: { ELM_HOME: path.resolve(options.cwd ?? process.cwd(), elmHome) } }
     const finalOptions = {
       ...compilerOptions,
@@ -271,8 +280,9 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
  * Compiles the Elm module that webpack asks for. Register it for `.elm` files.
  *
  * By default the build uses `--debug` in development mode and `--optimize` in
- * production mode. The options can change that, and can pass any other option
- * of `@elm-toolkit/node-elm-compiler`, such as `pathToElm`. The `files` option
+ * production mode, and adds hot module replacement in development mode. The
+ * options can change that, and can pass any other option of
+ * `@elm-toolkit/node-elm-compiler`, such as `pathToElm`. The `files` option
  * compiles several modules into one bundle instead of the requested file alone.
  *
  * A failed build reaches webpack as an error, and the compiler messages appear in
@@ -370,7 +380,9 @@ export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOpti
     const output = results[results.length - 1] as PromiseResult
 
     if (output.kind === 'success') {
-      callback(null, output.result as string)
+      const javascript = output.result as string
+
+      callback(null, options.hotModuleReplacement === true ? inject(javascript) : javascript)
     } else {
       let compiledError: Error
 

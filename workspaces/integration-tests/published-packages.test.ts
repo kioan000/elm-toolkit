@@ -149,14 +149,13 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     )
   })
 
-  it('exposes both webpack loaders as default exports', () => {
+  it('exposes the webpack loader as a default export', () => {
     const exported = runInConsumer(`
       const loader = await import('@elm-toolkit/webpack-elm-loader')
-      const hot = await import('@elm-toolkit/webpack-elm-loader/hot')
-      console.log(typeof loader.default, typeof hot.default)
+      console.log(typeof loader.default)
     `)
 
-    assert.equal(exported, 'function function')
+    assert.equal(exported, 'function')
   })
 
   it('exposes the kernel patcher plugin as a default export', () => {
@@ -184,12 +183,26 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     assert.equal(exported, 'function compileProgram,runElm,startMain')
   })
 
-  it('ships the hot reload runtime that the hot loader reads', () => {
-    // The runtime is copied into dist by the build script, outside tsc, so only an installed
-    // package shows whether it arrived. The input is the smallest text that ends like Elm output.
+  it('ships the hot reload runtime that the loader reads', () => {
+    // The build copies the runtime outside tsc, so only an installed package shows that it arrived.
+    // A stand-in compiler writes the smallest Elm output, and development mode adds the runtime.
     const injected = runInConsumer(`
-      const hot = await import('@elm-toolkit/webpack-elm-loader/hot')
-      console.log(hot.default('(function(scope){_Platform_export({});}(this));').includes('HMR BEGIN'))
+      import { chmodSync, writeFileSync } from 'node:fs'
+      const loader = await import('@elm-toolkit/webpack-elm-loader')
+      const fakeElm = process.cwd() + '/fake-elm'
+      writeFileSync(fakeElm, '#!/bin/sh\\nwhile [ $# -gt 0 ]; do [ "$1" = --output ] && printf "%s" "(function(scope){_Platform_export({});}(this));" > "$2"; shift; done\\n')
+      chmodSync(fakeElm, 0o755)
+      await new Promise((resolve) => {
+        loader.default.call({
+          _compiler: { options: { mode: 'development' } },
+          async: () => (error, output) => {
+            console.log(error === null && output.includes('HMR BEGIN'))
+            resolve()
+          },
+          query: { pathToElm: fakeElm },
+          resourcePath: process.cwd() + '/Main.elm',
+        })
+      })
     `)
 
     assert.equal(injected, 'true')
