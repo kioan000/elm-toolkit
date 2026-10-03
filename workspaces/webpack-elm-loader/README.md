@@ -29,14 +29,21 @@ The build uses `--debug` in development mode and `--optimize` in production
 mode. The options can change both, and they accept every option of
 `@elm-toolkit/node-elm-compiler`, for example `pathToElm`.
 
+`elmHome` sets the `ELM_HOME` that the compiler uses, relative to `cwd`. Without
+it, the compiler uses the `ELM_HOME` of the environment, or `~/.elm` when that is
+not set. When `@elm-toolkit/webpack-elm-kernel-patcher-plugin` patches an Elm
+home of its own, give the loader the same folder.
+
 In watch mode the loader reports every local module that the entry imports, so a
 change in any of them starts a new build. With `cwd`, it also watches `elm.json`
 and each source directory, so a new file is noticed too.
 
 ## Reloading in place
 
-Put the hot loader before the Elm loader. Webpack runs the loaders of a rule from
-the last one to the first, so the hot loader receives the compiled code.
+Put the hot loader BEFORE the Elm loader. Webpack runs the loaders of a rule from
+the last one to the first, so the hot loader receives the compiled code. In the
+other order it receives the Elm source, and it stops the build with a message
+that says to swap the two loaders.
 
 ```js
 use: [
@@ -52,6 +59,12 @@ development, because the added code makes the bundle much larger.
 The runtime in `hot/runtime.js` is the one from `elm-hot`, under its MIT
 license. It is injected as text into the compiled Elm code, so it is not linted
 or formatted with the rest of the repository.
+
+An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
+reloads itself: a development build offers `Elm.hot.reload()`. When that is
+there, the hot loader passes each new version of the code to it, and the elm-hot
+runtime stays off. Otherwise the elm-hot runtime does the work, as before. The
+patched kernel comes from `@elm-toolkit/webpack-elm-kernel-patcher-plugin`.
 
 ## Compatibility
 

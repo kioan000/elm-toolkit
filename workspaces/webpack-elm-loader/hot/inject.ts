@@ -7,6 +7,13 @@
  * `Browser.Navigation.Key` tagged, so the runtime can find that key in the model
  * and replace it after a reload.
  *
+ * A kernel patched with elm/core#1155 can reload itself: in a development build
+ * it exposes `Elm.hot.reload()`. Whether it does is known only when the code
+ * runs, because an optimized build still contains that function as dead code.
+ * So both ways are injected, and the running code picks one: with `Elm.hot` the
+ * new code is handed to `Elm.hot.reload()` and the elm-hot runtime stays off;
+ * without it, the elm-hot runtime works as before.
+ *
  * @packageDocumentation
  */
 
@@ -20,11 +27,30 @@ const hmrRuntimePath = path.join(import.meta.dirname, 'runtime.js')
 let cachedRuntimeCode: string | null = null
 const moduleSuffixPattern = /(_Platform_export\([^]*)(}\(this\)\);)/
 const navKeyPattern =
-  /var\s+key\s*=\s*function\s*\(\)\s*{\s*key.a\(\s*onUrlChange\(\s*_Browser_getUrl\(\)\s*\)\s*\);\s*};/
+  /var\s+key\s*=\s*function\s*\(\)\s*{\s*key.a\(\s*(?:impl\.)?onUrlChange\(\s*_Browser_getUrl\(\)\s*\)\s*\);\s*};/
 const unsupportedElmVersionMessage =
   '[elm-hot] Elm 0.18 is not supported. Please use fluxxu/elm-hot-loader@0.5.x instead.'
 const invalidElmOutputMessage = 'Compiled JS from the Elm compiler is not valid. You must use the Elm 0.19 compiler.'
 const navKeyNotFoundMessage = '[elm-hot] Browser.Navigation.Key def not found. Version mismatch?'
+
+// Runs after the Elm wrapper, where `this` is the module's exports and holds `Elm`. On the first run
+// it accepts updates; on a later run, the new `Elm` goes to the one that owns the running apps.
+const coreHotReload = `
+//////////////////// ELM CORE HOT RELOAD BEGIN ////////////////////
+if (module.hot && this.Elm && this.Elm.hot) {
+  (function (Elm, hot) {
+    var running = hot.data && hot.data.Elm;
+    if (running) {
+      running.hot.reload({ Elm: Elm });
+    }
+    hot.dispose(function (data) {
+      data.Elm = running || Elm;
+    });
+    hot.accept();
+  })(this.Elm, module.hot);
+}
+//////////////////// ELM CORE HOT RELOAD END ////////////////////
+`
 
 /**
  * Returns the compiled Elm code with the hot reload runtime added. Most callers
@@ -58,7 +84,19 @@ export function inject(originalElmCodeJs: string): string {
     throw new Error(invalidElmOutputMessage)
   }
 
-  return codeWithNavPatch.slice(0, match.index) + match[1] + '\n\n' + runtimeCode + '\n\n' + match[2]
+  // The elm-hot runtime stays off when the kernel reloads itself through Elm.hot.
+  const elmHotRuntime = `if (!(scope['Elm'] && scope['Elm'].hot)) {\n${runtimeCode}\n}`
+
+  return (
+    codeWithNavPatch.slice(0, match.index) +
+    match[1] +
+    '\n\n' +
+    elmHotRuntime +
+    '\n\n' +
+    match[2] +
+    '\n' +
+    coreHotReload
+  )
 }
 
 /**

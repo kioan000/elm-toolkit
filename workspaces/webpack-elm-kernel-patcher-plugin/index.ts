@@ -14,32 +14,45 @@ import type { Compiler } from 'webpack'
 import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
 import { prettyError, prettyInfo } from '@elm-toolkit/cli-lib'
 
-const PLUGIN_NAME = 'ElmKernelReplacementPlugin'
+const PLUGIN_NAME = 'ElmKernelPatcherPlugin'
 
 /**
- * Configures the plugin. Only `isEnabled` is required; the other fields keep the
+ * Configures the plugin.
+ *
+ * `isEnabled` is a boolean, or a function that receives the webpack compiler
+ * and decides when webpack starts. The other fields are optional and keep the
  * defaults of the command line tool.
  *
  * @example
  *
- * Patch only in development, with the project in a subfolder
+ * Patch only in development builds, into a folder of the project
  * ```TypeScript
- *   const options: ElmKernelReplacementPluginOptions = {
- *     elmJsonFolder: path.join(import.meta.dirname, 'frontend'),
- *     isEnabled: mode === 'development',
+ *   const options: ElmKernelPatcherPluginOptions = {
+ *     elmHome: 'elm-home/elm-stuff',
+ *     isEnabled: (compiler) => compiler.options.mode === 'development',
  *   }
  * ```
  */
-export type ElmKernelReplacementPluginOptions = {
+export type ElmKernelPatcherPluginOptions = {
+  /**
+   * The Elm home to patch, relative to the folder that holds `elm.json`. Without
+   * it, the `ELM_HOME` of the environment is used, or `~/.elm` when that is not
+   * set. The Elm loader must compile with the same Elm home.
+   */
+  elmHome?: string
   /**
    * The folder that holds `elm.json`. It defaults to `INIT_CWD`, which npm and
    * yarn set when they run a script, and then to the current directory.
    */
   elmJsonFolder?: string
-  /** Enables or disables the plugin. When false the plugin is a no-op. */
-  isEnabled: boolean
-  /** Whether to extract patches from the archive (default: true). */
-  useArchive?: boolean
+  /** Enables the plugin, or decides when webpack starts. */
+  isEnabled: boolean | ((compiler: Compiler) => boolean)
+  /**
+   * Patches of your own: a `.tar.gz` archive of a `patches/` folder, or the
+   * folder itself, relative to the folder that holds `elm.json`. Without it, the
+   * archive of `@elm-toolkit/cli-elm-kernel-patcher` is used.
+   */
+  patches?: string
 }
 
 /**
@@ -48,8 +61,8 @@ export type ElmKernelReplacementPluginOptions = {
  * It hooks into `initialize` so that the patched packages are
  * already in place when `elm-webpack-loader` invokes the Elm compiler.
  *
- * Internally it calls the `replaceKernelPackages` function exported by the
- * `elm-kernel-replacement` CLI module directly in-process, avoiding the
+ * Internally it calls the `replaceKernelPackages` function exported by
+ * `@elm-toolkit/cli-elm-kernel-patcher` directly in-process, avoiding the
  * overhead of spawning a child process on every recompilation.
  *
  * When patching fails, for example because `elm.json` pins a version that the
@@ -61,26 +74,21 @@ export type ElmKernelReplacementPluginOptions = {
  * Patch the kernel before webpack compiles any Elm module
  * ```TypeScript
  *   export default {
- *     plugins: [new ElmKernelReplacementPlugin({ isEnabled: true })],
+ *     plugins: [new ElmKernelPatcherPlugin({ isEnabled: true })],
  *   }
  * ```
  */
-export default class ElmKernelReplacementPlugin {
-  /** Resolved plugin configuration with defaults applied */
-  private readonly options: Pick<ElmKernelReplacementPluginOptions, 'elmJsonFolder'> &
-    Required<Omit<ElmKernelReplacementPluginOptions, 'elmJsonFolder'>>
+export default class ElmKernelPatcherPlugin {
+  /** The plugin configuration, as the caller gave it */
+  private readonly options: ElmKernelPatcherPluginOptions
 
   /**
-   * Creates a new instance of the Elm kernel replacement plugin
+   * Creates a new instance of the Elm kernel patcher plugin
    *
    * @param options - plugin configuration options
    */
-  public constructor(options: ElmKernelReplacementPluginOptions) {
-    this.options = {
-      elmJsonFolder: options.elmJsonFolder,
-      isEnabled: options.isEnabled,
-      useArchive: options.useArchive ?? true,
-    }
+  public constructor(options: ElmKernelPatcherPluginOptions) {
+    this.options = options
   }
 
   /**
@@ -89,15 +97,23 @@ export default class ElmKernelReplacementPlugin {
    * @param compiler - the webpack compiler instance
    */
   public apply(compiler: Compiler): void {
-    if (!this.options.isEnabled) {
+    const { isEnabled } = this.options
+
+    if (isEnabled === false) {
       return
     }
 
     compiler.hooks.initialize.tap(PLUGIN_NAME, () => {
       try {
+        // A function decides here, once the configuration of webpack is complete.
+        if (typeof isEnabled === 'function' && !isEnabled(compiler)) {
+          return
+        }
+
         prettyInfo(`[${PLUGIN_NAME}]`, 'Patching Elm kernel packages before compilation…')
 
-        const args = prepareArgs(this.options.useArchive, this.options.elmJsonFolder)
+        const { elmHome, elmJsonFolder, patches } = this.options
+        const args = prepareArgs({ elmHome, elmJsonFolder, patches })
         replaceKernelPackages(args)
       } catch (error: unknown) {
         prettyError(`[${PLUGIN_NAME}]`, 'Elm kernel patching failed')
