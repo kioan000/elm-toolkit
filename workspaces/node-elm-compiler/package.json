@@ -11,11 +11,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./result-api": {
+      "types": "./dist/result-api.d.ts",
+      "default": "./dist/result-api.js"
     }
   },
   "files": [
     "dist",
     "index.ts",
+    "result-api.ts",
+    "compile-error.ts",
+    "process.ts",
     "find-elm-dependencies.ts",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
@@ -28,7 +35,10 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "prepare": "yarn build",
-    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+    "test": "tsc -p test/tsconfig.json && node --test --test-concurrency=1 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@elm-toolkit/cli-lib": "workspace:^"
   },
   "devDependencies": {
     "elm": "^0.19.2-0",

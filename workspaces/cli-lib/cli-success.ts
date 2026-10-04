@@ -3,7 +3,7 @@
  * same layout as `CliError`.
  *
  * A `CliSuccess` has a summary, one line that says what the command did, the
- * details of what happened, and, when there is one, the next step. The
+ * lines of what happened, and, when there is one, the next step. The
  * function that runs a command prints it once, with `print`.
  *
  * @packageDocumentation
@@ -13,26 +13,26 @@ import { type Section, printSections } from './layout.ts'
 import { Maybe } from './maybe.ts'
 
 /**
- * What a command did, the details, and what to do next.
+ * What a command did, what happened, and what to do next.
  *
  * @example
  *
  * Describe a built archive
  * ```TypeScript
  *   const built: CliSuccess = {
- *     details: ['elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e'],
+ *     whatHappened: ['elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e'],
  *     next: Maybe.Just('Give the folder to the patcher with `cli-elm-kernel-patcher --patches elm-kernel-patcher`.'),
  *     summary: 'Built elm-kernel-patcher/patches.tar.gz from 1 commit.',
  *   }
  * ```
  */
 export type CliSuccess = {
-  /** The lines that say what happened. */
-  readonly details: ReadonlyArray<string>
   /** What to do next, when there is a natural next step. */
   readonly next: Maybe<string>
   /** What the command did, in one line. */
   readonly summary: string
+  /** The lines that say what happened. */
+  readonly whatHappened: ReadonlyArray<string>
 }
 
 /**
@@ -48,23 +48,23 @@ export type CliSuccess = {
  *   })
  * ```
  *
- * @param parts - the summary, what the command did in one line; the details,
- * the lines that say what happened; and the next step
+ * @param parts - the summary, what the command did in one line; what happened,
+ * the lines that explain it; and the next step
  * @returns the success
  */
-function create(parts: { details?: ReadonlyArray<string>; next?: string; summary: string }): CliSuccess {
+function create(parts: { next?: string; summary: string; whatHappened?: ReadonlyArray<string> }): CliSuccess {
   return {
-    details: parts.details ?? [],
     next: parts.next === undefined ? Maybe.Nothing : Maybe.Just(parts.next),
     summary: parts.summary,
+    whatHappened: parts.whatHappened ?? [],
   }
 }
 
 /**
  * Prints a success the way every command of the toolkit does. The first line
  * holds the title and the summary, highlighted in green. Below it come the
- * sections that have content, each after a blank line: "What happened:" with
- * the details, and "Next step:", its label in green.
+ * sections that have content, each after a blank line: "What happened:" and
+ * "Next step:", its label in green.
  *
  * @example
  *
@@ -85,7 +85,7 @@ function create(parts: { details?: ReadonlyArray<string>; next?: string; summary
  */
 function print(title: string, success: CliSuccess): void {
   const sections: ReadonlyArray<Section> = [
-    { label: 'What happened:', lines: success.details },
+    { label: 'What happened:', lines: success.whatHappened },
     { label: 'Next step:', labelColor: '\x1b[32m', lines: success.next.map((text) => [text]).withDefault([]) },
   ]
 

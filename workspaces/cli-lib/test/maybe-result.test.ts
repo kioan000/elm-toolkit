@@ -151,6 +151,13 @@ describe('Result', () => {
     )
   })
 
+  it('waits for a promise with fromPromise, and keeps the reason of a rejection', async () => {
+    const reason = new Error('ENOENT')
+
+    assert.deepEqual(await Result.fromPromise(Promise.resolve(64)), Result.Ok(64))
+    assert.deepEqual(await Result.fromPromise(Promise.reject(reason)), Result.Err(reason))
+  })
+
   it('chains methods from top to bottom', () => {
     const outcome = Result.fromAttempt(() => JSON.parse('{ "count": 32 }') as { count: number })
       .map((parsed) => parsed.count * 2)

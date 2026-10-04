@@ -12,6 +12,8 @@
  * @packageDocumentation
  */
 
+/* eslint-disable import-x/no-deprecated -- these tests check the deprecated API, which stays until it is removed */
+
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'

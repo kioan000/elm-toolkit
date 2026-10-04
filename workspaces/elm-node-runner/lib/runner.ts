@@ -20,7 +20,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { compile } from '@elm-toolkit/node-elm-compiler'
+import { CliError } from '@elm-toolkit/cli-lib'
+import { CompileError, compile } from '@elm-toolkit/node-elm-compiler/result-api'
 
 // The compiler writes a script that assigns to `this.Elm`, which only a CommonJS
 // loader runs correctly, so the output is loaded with `require` and not `import`.
@@ -128,17 +129,26 @@ export async function compileProgram(
     await new Promise<void>((resolve, reject) => {
       let startError: Error | undefined
 
-      compile(elmFiles, { optimize: options.optimize, output, verbose: options.verbose })
-        .on('error', (error) => {
-          startError = error
-        })
-        .on('close', (exitCode) => {
-          if (exitCode === 0) {
-            resolve()
-          } else {
-            reject(startError ?? new Error('The Elm compiler reported an error.'))
-          }
-        })
+      const started = compile(elmFiles, { optimize: options.optimize, output, verbose: options.verbose })
+
+      switch (started.tag) {
+        case 'Err':
+          reject(new Error(CliError.toString(CompileError.toCliError(started.error))))
+
+          return
+        case 'Ok':
+          started.value
+            .on('error', (error) => {
+              startError = error
+            })
+            .on('close', (exitCode) => {
+              if (exitCode === 0) {
+                resolve()
+              } else {
+                reject(startError ?? new Error('The Elm compiler reported an error.'))
+              }
+            })
+      }
     })
 
     return (require(output) as { Elm: ElmNamespace }).Elm

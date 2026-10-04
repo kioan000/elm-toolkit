@@ -162,11 +162,11 @@ export function buildArchive(options: ArchiveOptions = {}): Result<CliError, str
 
   return report('archive build', built, (packages) =>
     CliSuccess.create({
-      details: packages.map(
-        ({ commit, git, packageName, version }) => `${packageName} ${version} from ${git} at ${commit.slice(0, 7)}`
-      ),
       next: `Give the folder to the patcher with \`${patchCommand(options)}\`, or to the webpack plugin as "patches".`,
       summary: `Built ${shown(archive)} from ${commits(packages.length)}.`,
+      whatHappened: packages.map(
+        ({ commit, git, packageName, version }) => `${packageName} ${version} from ${git} at ${commit.slice(0, 7)}`
+      ),
     })
   ).map(() => archive)
 }
@@ -228,8 +228,8 @@ export function checkArchive(options: ArchiveOptions = {}): Result<CliError, num
 
   return report('archive check', checked, (count) =>
     CliSuccess.create({
-      details: [`Compared ${count} files with the commits of the manifest. None of them differs.`],
       summary: `${shown(archive)} matches ${shown(manifest)}.`,
+      whatHappened: [`Compared ${count} files with the commits of the manifest. None of them differs.`],
     })
   )
 }
@@ -505,9 +505,9 @@ function compareFolders(
       ? Result.Ok(count)
       : Result.Err(
           CliError.create({
-            details: differences,
             solution: `Rebuild the archive with \`${paths.build}\`.`,
             summary: `${shown(paths.archive)} does not match ${shown(paths.manifest)}.`,
+            whatHappened: differences,
           })
         )
   )

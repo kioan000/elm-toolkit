@@ -9,6 +9,8 @@
  * @packageDocumentation
  */
 
+/* eslint-disable import-x/no-deprecated -- these tests check the deprecated API, which stays until it is removed */
+
 import type { ChildProcess } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

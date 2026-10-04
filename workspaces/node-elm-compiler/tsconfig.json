@@ -14,5 +14,6 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "find-elm-dependencies.ts"]
+  "include": ["index.ts", "result-api.ts", "compile-error.ts", "process.ts", "find-elm-dependencies.ts"],
+  "references": [{ "path": "../cli-lib" }]
 }

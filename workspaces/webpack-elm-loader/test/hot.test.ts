@@ -13,7 +13,8 @@ import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { compileToString } from '@elm-toolkit/node-elm-compiler'
+import { CliError } from '@elm-toolkit/cli-lib'
+import { CompileError, compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
 
 import { inject } from '../hot/inject.ts'
 import { findElmBinary } from './elm-binary.ts'
@@ -29,12 +30,19 @@ const navigationKeyTag = "key['elm-hot-nav-key'] = true;"
  * @param mode - which kind of build to produce
  * @returns the JavaScript that Elm produced
  */
-function compileFixture(name: string, mode: 'debug' | 'optimize'): Promise<string> {
-  return compileToString(path.join(project, 'src', `${name}.elm`), {
+async function compileFixture(name: string, mode: 'debug' | 'optimize'): Promise<string> {
+  const compiled = await compileToString(path.join(project, 'src', `${name}.elm`), {
     cwd: project,
     [mode]: true,
     pathToElm: findElmBinary(),
   })
+
+  switch (compiled.tag) {
+    case 'Ok':
+      return compiled.value
+    case 'Err':
+      throw new Error(CliError.toString(CompileError.toCliError(compiled.error)))
+  }
 }
 
 describe('inject', () => {

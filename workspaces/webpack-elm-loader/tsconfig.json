@@ -15,5 +15,5 @@
     "types": ["node"]
   },
   "include": ["index.ts", "hot/inject.ts"],
-  "references": [{ "path": "../node-elm-compiler" }]
+  "references": [{ "path": "../cli-lib" }, { "path": "../node-elm-compiler" }]
 }
