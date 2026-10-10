@@ -167,7 +167,8 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 - `@elm-toolkit/node-elm-compiler`: the `./result-api` subpath. It has the
   functions of the root, with the same names and options, but each one returns
   a `Result` with a `CompileError` instead of throwing.
-  `CompileError.toCliError` turns that error into a message for a person.
+  `CompileError.toCliError` turns that error into a message for a person. An
+  error that comes from an exception keeps it in `original`.
 - `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
   that a program compiles, and writes no output.
 
@@ -192,6 +193,17 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   messages of a failed build to the terminal. The error holds them instead.
 - `@elm-toolkit/node-elm-compiler`: `compileToString` keeps the `processOpts`
   of the caller, such as `env`. Before, it replaced them.
+- `@elm-toolkit/node-elm-compiler`: some messages of the deprecated API say
+  more than before. Code that compares the text of an error must change:
+  - `compile` and `compileToString` with sources that are neither a string nor
+    a list throw a message that says so, instead of a message about the
+    compiler.
+  - A failed build of `compileToString` has only the problems that Elm
+    reports, without the progress lines, also in the `verbose` log.
+  - `compileWorker` names the compiler when it is not installed, instead of
+    `Errored with exit code -2`.
+  - `findAllDependencies` logs a file that it cannot read with a message that
+    says what happened and how to fix it, instead of the raw error.
 - `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
   new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
   imports of a file, webpack shows a warning in the layout of the toolkit,

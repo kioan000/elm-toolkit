@@ -165,7 +165,12 @@ class Parser {
  */
 async function baseDirOf(file: string): Promise<Result<CompileError, string>> {
   const firstLine = (await Result.fromPromise(readFirstLine(file))).mapError((caught): CompileError => {
-    return { cause: caught instanceof Error ? caught.message : String(caught), file, kind: 'entryNotRead' }
+    return {
+      cause: caught instanceof Error ? caught.message : String(caught),
+      file,
+      kind: 'entryNotRead',
+      original: caught,
+    }
   })
 
   return firstLine.andThen((line): Result<CompileError, string> => {

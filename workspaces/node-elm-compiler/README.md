@@ -45,7 +45,9 @@ switch (compiled.tag) {
 
 `CompileError.toCliError` turns an error into a message for a person, with the
 next step when there is one. A caller can also read `error.kind` and react to
-one case, for example show the messages of a failed build in the browser.
+one case, for example show the messages of a failed build in the browser. An
+error that comes from an exception keeps the exception in `original`, with its
+stack and its system code.
 
 `compile` runs `elm make` as a child process and returns that process, for a
 caller that wants the exit code or the streams. Both functions have a `Sync`

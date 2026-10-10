@@ -28,6 +28,7 @@ import {
   findAllDependencies,
   prepareProcessArgs,
 } from '../result-api.ts'
+import type { SyncCompilerResult } from '../process.ts'
 import { findElmBinary } from './elm-binary.ts'
 
 const elm = findElmBinary()
@@ -76,7 +77,7 @@ function valueOf<A>(result: Result<CompileError, A>): A {
  * @returns a function with the shape of the `spawn` option
  */
 function fakeCompiler(
-  run: { exitCode: number; writes: ReadonlyArray<['stderr' | 'stdout', string]> },
+  run: { exitCode: number; writes: ReadonlyArray<['stderr' | 'stdout', Buffer | string]> },
   received: string[][] = []
 ): CompilerOptions['spawn'] {
   return (_command: string, args: string[]) => {
@@ -168,11 +169,12 @@ describe('compile', () => {
     assert.equal(started, false)
   })
 
-  it('returns a spawn function that throws as a compiler that did not start', () => {
+  it('returns a spawn function that throws as a compiler that did not start, with the original error', () => {
+    const thrown = Object.assign(new Error('spawn EACCES'), { code: 'EACCES' })
     const outcome = compile(source('Main'), {
       pathToElm: '/opt/elm',
       spawn: () => {
-        throw Object.assign(new Error('spawn EACCES'), { code: 'EACCES' })
+        throw thrown
       },
     })
 
@@ -180,6 +182,7 @@ describe('compile', () => {
       cause: 'spawn EACCES',
       code: Maybe.Just('EACCES'),
       kind: 'compilerNotStarted',
+      original: thrown,
       pathToElm: '/opt/elm',
     })
   })
@@ -262,6 +265,21 @@ describe('dryCompile', () => {
     }
   })
 
+  it('keeps a character whose bytes arrive in two chunks', async () => {
+    const message = Buffer.from('-- TYPE MISMATCH --\n\n    "café"\n')
+    const split = message.indexOf('é') + 1
+    const spawn = fakeCompiler({
+      exitCode: 1,
+      writes: [
+        ['stderr', message.subarray(0, split)],
+        ['stderr', message.subarray(split)],
+      ],
+    })
+    const error = errorOf(await dryCompile(source('Main'), { spawn }))
+
+    assert.equal(error.kind === 'compileFailed' ? error.output : '', message.toString('utf8'))
+  })
+
   it('returns a type error as a failed build, with the messages of Elm', async () => {
     const error = errorOf(await dryCompile(source('Broken'), inApp))
 
@@ -274,6 +292,31 @@ describe('dryCompile', () => {
       errorOf(await dryCompile(source('Main'), { ...inApp, pathToElm: missingElm })).kind,
       'compilerNotStarted'
     )
+  })
+
+  it('returns a compiler that reached the timeout as stopped, not as a failed build', async () => {
+    const error = errorOf(await dryCompile(source('Main'), { ...inApp, processOpts: { timeout: 1 } }))
+
+    assert.equal(error.kind, 'compilerStopped')
+    assert.equal(error.kind === 'compilerStopped' ? error.reason : undefined, 'timeout')
+  })
+
+  it('returns a compiler that another program stopped as stopped by a signal', async () => {
+    const spawn: CompilerOptions['spawn'] = () => {
+      const compiler = Object.assign(new EventEmitter(), { stderr: new EventEmitter(), stdout: new EventEmitter() })
+
+      setImmediate(() => compiler.emit('close', null, 'SIGKILL'))
+
+      return compiler as never
+    }
+
+    assert.deepEqual(errorOf(await dryCompile(source('Main'), { spawn })), {
+      cause: 'SIGKILL',
+      kind: 'compilerStopped',
+      original: 'SIGKILL',
+      pathToElm: 'elm',
+      reason: 'signal',
+    })
   })
 })
 
@@ -294,6 +337,35 @@ describe('compileSync and compileToStringSync', () => {
 
   it('returns a missing binary as a compiler that did not start', () => {
     assert.equal(errorOf(compileSync(source('Main'), { ...quiet, pathToElm: missingElm })).kind, 'compilerNotStarted')
+  })
+
+  it('returns a compiler that reached the timeout as stopped, not as one that did not start', () => {
+    const timedOut = Object.assign(new Error('spawnSync elm ETIMEDOUT'), { code: 'ETIMEDOUT' })
+    const error = errorOf(
+      compileSync(source('Main'), {
+        ...quiet,
+        processOpts: { timeout: 1000 },
+        spawn: (): SyncCompilerResult => {
+          return {
+            error: timedOut,
+            output: [],
+            pid: 4242,
+            signal: 'SIGTERM',
+            status: null,
+            stderr: '',
+            stdout: '',
+          }
+        },
+      })
+    )
+
+    assert.deepEqual(error, {
+      cause: 'spawnSync elm ETIMEDOUT',
+      kind: 'compilerStopped',
+      original: timedOut,
+      pathToElm: elm,
+      reason: 'timeout',
+    })
   })
 
   it('returns the generated JavaScript as text', () => {
@@ -408,6 +480,7 @@ describe('CompileError.toCliError', () => {
       file: 'src/Doubler.elm',
       kind: 'workerNotStarted',
       moduleName: 'Doubler',
+      original: new Error('Problem with the flags given to your Elm program on initialization.'),
     })
 
     assert.equal(error.summary, 'compileWorker: the module "Doubler" failed to start.')
@@ -415,7 +488,12 @@ describe('CompileError.toCliError', () => {
   })
 
   it('names the temporary folder that could not be used', () => {
-    const error = CompileError.toCliError({ cause: 'ENOSPC', folder: '/tmp', kind: 'tempFolderNotCreated' })
+    const error = CompileError.toCliError({
+      cause: 'ENOSPC',
+      folder: '/tmp',
+      kind: 'tempFolderNotCreated',
+      original: Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }),
+    })
 
     assert.match(error.solution.withDefault(''), /Check that \/tmp exists/)
   })
@@ -425,11 +503,50 @@ describe('CompileError.toCliError', () => {
       cause: 'spawn elm ENOENT',
       code: Maybe.Just('ENOENT'),
       kind: 'compilerNotStarted',
+      original: Object.assign(new Error('spawn elm ENOENT'), { code: 'ENOENT' }),
       pathToElm: 'elm',
     })
 
     assert.equal(error.summary, 'The Elm compiler "elm" was not found.')
     assert.match(error.solution.withDefault(''), /npm install --save-dev elm/)
+  })
+
+  it('points to the timeout option when the system stopped the compiler', () => {
+    const error = CompileError.toCliError({
+      cause: 'spawnSync elm ETIMEDOUT',
+      kind: 'compilerStopped',
+      original: Object.assign(new Error('spawnSync elm ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+      pathToElm: 'elm',
+      reason: 'timeout',
+    })
+
+    assert.equal(error.summary, 'The Elm compiler "elm" took longer than the timeout.')
+    assert.match(error.solution.withDefault(''), /Raise processOpts\.timeout/)
+  })
+
+  it('points to the buffer option when the messages were too long', () => {
+    const error = CompileError.toCliError({
+      cause: 'spawnSync elm ENOBUFS',
+      kind: 'compilerStopped',
+      original: Object.assign(new Error('spawnSync elm ENOBUFS'), { code: 'ENOBUFS' }),
+      pathToElm: 'elm',
+      reason: 'maxBuffer',
+    })
+
+    assert.match(error.solution.withDefault(''), /Raise processOpts\.maxBuffer/)
+  })
+
+  it('says that a build stopped by a signal says nothing about the Elm code', () => {
+    const error = CompileError.toCliError({
+      cause: 'SIGKILL',
+      kind: 'compilerStopped',
+      original: 'SIGKILL',
+      pathToElm: 'elm',
+      reason: 'signal',
+    })
+
+    assert.equal(error.summary, 'The Elm compiler "elm" was stopped before it finished.')
+    assert.match(error.whatHappened.join('\n'), /says nothing about the Elm code/)
   })
 
   it('keeps the messages of Elm as the details of a failed build, and points to them', () => {
@@ -477,7 +594,12 @@ describe('CompileError.toCliError', () => {
   })
 
   it('asks for a bug report when the output cannot be read', () => {
-    const error = CompileError.toCliError({ cause: 'ENOENT', file: '/tmp/elm-output.js', kind: 'outputNotRead' })
+    const error = CompileError.toCliError({
+      cause: 'ENOENT',
+      file: '/tmp/elm-output.js',
+      kind: 'outputNotRead',
+      original: Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+    })
 
     assert.match(error.solution.withDefault(''), /bug of node-elm-compiler/)
   })

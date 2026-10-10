@@ -17,6 +17,11 @@ import { CliError, type Maybe } from '@elm-toolkit/cli-lib'
  * One failure of a call of the Elm compiler. Read it with a `switch` on `kind`,
  * which must handle every case.
  *
+ * A case that comes from an exception keeps its message in `cause`, and the
+ * value itself, as JavaScript threw it, in `original`. Use `original` when the
+ * message is not enough, for example to read the stack or the `path` of a
+ * system error.
+ *
  * @example
  *
  * React to a build that failed, and report everything else
@@ -37,7 +42,21 @@ export type CompileError =
       readonly cause: string
       readonly code: Maybe<string>
       readonly kind: 'compilerNotStarted'
+      readonly original: unknown
       readonly pathToElm: string
+    }
+  /**
+   * The compiler started, and was stopped before it finished. `reason` is `timeout` after
+   * `processOpts.timeout`, `maxBuffer` when its messages went past `processOpts.maxBuffer`, and
+   * `signal` when another program or the system stopped it. `original` is the error that Node
+   * reported, or the name of the signal when Node reported only that.
+   */
+  | {
+      readonly cause: string
+      readonly kind: 'compilerStopped'
+      readonly original: unknown
+      readonly pathToElm: string
+      readonly reason: 'maxBuffer' | 'signal' | 'timeout'
     }
   /** Elm ran on `sources` and reported problems; `output` holds the problems, as Elm wrote them. */
   | {
@@ -47,9 +66,14 @@ export type CompileError =
       readonly sources: ReadonlyArray<string>
     }
   /** The temporary folder for the output of Elm could not be created inside `folder`. */
-  | { readonly cause: string; readonly folder: string; readonly kind: 'tempFolderNotCreated' }
+  | {
+      readonly cause: string
+      readonly folder: string
+      readonly kind: 'tempFolderNotCreated'
+      readonly original: unknown
+    }
   /** The file that the compiler wrote could not be read. */
-  | { readonly cause: string; readonly file: string; readonly kind: 'outputNotRead' }
+  | { readonly cause: string; readonly file: string; readonly kind: 'outputNotRead'; readonly original: unknown }
   /** The compiled Elm file has no module of that name; `suggestions` lists the ones it has. */
   | {
       readonly file: string
@@ -58,11 +82,17 @@ export type CompileError =
       readonly suggestions: ReadonlyArray<string>
     }
   /** The `init` of the module threw, most often because of flags of the wrong type. */
-  | { readonly cause: string; readonly file: string; readonly kind: 'workerNotStarted'; readonly moduleName: string }
+  | {
+      readonly cause: string
+      readonly file: string
+      readonly kind: 'workerNotStarted'
+      readonly moduleName: string
+      readonly original: unknown
+    }
   /** The module has no ports, so Node cannot talk to it. */
   | { readonly file: string; readonly kind: 'noPorts'; readonly moduleName: string }
   /** The Elm file to start from could not be read. */
-  | { readonly cause: string; readonly file: string; readonly kind: 'entryNotRead' }
+  | { readonly cause: string; readonly file: string; readonly kind: 'entryNotRead'; readonly original: unknown }
   /** The first line of the Elm file is not a valid module declaration. */
   | { readonly file: string; readonly kind: 'invalidModule' }
 
@@ -101,6 +131,8 @@ function toCliError(error: CompileError): CliError {
       })
     case 'compilerNotStarted':
       return startError(error.pathToElm, error.code.withDefault(''), error.cause)
+    case 'compilerStopped':
+      return stoppedError(error.pathToElm, error.reason, error.cause)
     case 'compileFailed':
       return CliError.create({
         details: error.output.trim() === '' ? [] : error.output.trim().split('\n'),
@@ -234,6 +266,49 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
         solution: `Check that "${pathToElm}" is the Elm compiler, and that \`${pathToElm} --version\` works in a terminal.`,
         summary: `The Elm compiler "${pathToElm}" could not start.`,
         whatHappened: [`node-elm-compiler tried to run "${pathToElm}".`, `The system reported: ${cause}`],
+      })
+  }
+}
+
+/**
+ * Describes a compiler that was stopped before it finished, with the option
+ * that sets the limit it reached, when there is one.
+ *
+ * @param pathToElm - the binary that was started
+ * @param reason - why it stopped
+ * @param cause - the message of the system, or the name of the signal
+ * @returns the error for a person
+ */
+function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeout', cause: string): CliError {
+  switch (reason) {
+    case 'timeout':
+      return CliError.create({
+        solution: 'Raise processOpts.timeout, or remove it to let the build run until it ends.',
+        summary: `The Elm compiler "${pathToElm}" took longer than the timeout.`,
+        whatHappened: [
+          `node-elm-compiler started "${pathToElm}" with processOpts.timeout, and the system stopped it when that time passed.`,
+          'The build did not finish, so it says nothing about the Elm code.',
+        ],
+      })
+    case 'maxBuffer':
+      return CliError.create({
+        solution: 'Raise processOpts.maxBuffer, or set processOpts.stdio so that the messages go to the terminal.',
+        summary: `The Elm compiler "${pathToElm}" wrote more than processOpts.maxBuffer allows.`,
+        whatHappened: [
+          `node-elm-compiler captures the messages of "${pathToElm}", and the system stopped it when they went past the limit of processOpts.maxBuffer.`,
+          'The build did not finish, so it says nothing about the Elm code.',
+        ],
+      })
+    case 'signal':
+      return CliError.create({
+        solution:
+          'Run the build again. If it stops again, check whether a program or the system stops it, for example when memory runs out.',
+        summary: `The Elm compiler "${pathToElm}" was stopped before it finished.`,
+        whatHappened: [
+          `node-elm-compiler started "${pathToElm}", and the process ended because of a signal, not with an exit code.`,
+          `The system reported: ${cause}`,
+          'The build did not finish, so it says nothing about the Elm code.',
+        ],
       })
   }
 }

@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 
 import { Result } from '@elm-toolkit/cli-lib'
 
@@ -197,7 +198,7 @@ export function compileSync(sources: Sources, options: CompilerOptions): Result<
       .mapError((caught) => startError(caught, pathToElm))
       .andThen((ran: SyncCompilerResult): Result<CompileError, string> => {
         if (ran.error) {
-          return Result.Err(startError(ran.error, pathToElm))
+          return Result.Err(syncRunError(ran.error, pathToElm))
         }
 
         return outcome(ran.status, String(ran.stdout ?? ''), String(ran.stderr ?? ''), sources)
@@ -245,7 +246,7 @@ export async function compileToString(
     }
 
     return (await Result.fromPromise(readFile(output, { encoding: 'utf8' }))).mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file: output, kind: 'outputNotRead' }
+      return { cause: messageOf(caught), file: output, kind: 'outputNotRead', original: caught }
     })
   } finally {
     cleanupTempFileSync(output)
@@ -274,7 +275,7 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
     try {
       return compileSync(sources, { ...options, output }).andThen(() =>
         Result.fromAttempt(() => readFileSync(output, { encoding: 'utf8' })).mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: output, kind: 'outputNotRead' }
+          return { cause: messageOf(caught), file: output, kind: 'outputNotRead', original: caught }
         })
       )
     } finally {
@@ -344,7 +345,7 @@ export async function compileWorker(
 ): Promise<Result<CompileError, WorkerWithPorts>> {
   const temporary = (await Result.fromPromise(mkdtemp(path.join(tmpdir(), 'node-elm-compiler-')))).mapError(
     (caught): CompileError => {
-      return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated' }
+      return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated', original: caught }
     }
   )
 
@@ -409,7 +410,7 @@ function toList(sources: Sources): ReadonlyArray<string> {
  * @param sources - the Elm files
  * @param options - the compiler options, with the output to write
  * @returns `Ok` the messages of the compiler, or `Err` when an option is
- * unknown, the compiler cannot start, or the build fails
+ * unknown, the compiler cannot start or is stopped, or the build fails
  */
 async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<Result<CompileError, string>> {
   const pathToElm = options.pathToElm || elmBinaryName
@@ -421,26 +422,27 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
 
   const finished = await new Promise<{
     exitCode: number | null
+    signal: string | null
     startFailure?: unknown
     stderr: string
     stdout: string
   }>((resolve) => {
     const compiler: CompilerProcessLike = started.value
-    let stdout = ''
-    let stderr = ''
+    const stdout = collectText(compiler.stdout)
+    const stderr = collectText(compiler.stderr)
     let startFailure: unknown
 
-    compiler.stdout?.on('data', (chunk: string | Buffer) => {
-      stdout += chunk.toString()
-    })
-    compiler.stderr?.on('data', (chunk: string | Buffer) => {
-      stderr += chunk.toString()
-    })
     compiler.on('error', (err: unknown) => {
       startFailure = err
     })
-    compiler.on('close', (exitCode: unknown) => {
-      resolve({ exitCode: typeof exitCode === 'number' ? exitCode : null, startFailure, stderr, stdout })
+    compiler.on('close', (exitCode: unknown, signal: unknown) => {
+      resolve({
+        exitCode: typeof exitCode === 'number' ? exitCode : null,
+        signal: typeof signal === 'string' ? signal : null,
+        startFailure,
+        stderr: stderr(),
+        stdout: stdout(),
+      })
     })
   })
 
@@ -452,7 +454,73 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
     return Result.Err(startError(finished.startFailure, pathToElm))
   }
 
+  if (finished.exitCode === null && finished.signal !== null) {
+    return Result.Err(stoppedBySignal(finished.signal, options.processOpts, pathToElm))
+  }
+
   return outcome(finished.exitCode, finished.stdout, finished.stderr, sources)
+}
+
+/**
+ * Collects what a stream of the compiler writes, as UTF-8 text.
+ *
+ * @param stream - stdout or stderr of the compiler, absent when it is not piped
+ * @returns a function that gives the text written so far
+ */
+function collectText(stream: NodeJS.ReadableStream | null | undefined): () => string {
+  // One decoder for the whole stream: a character of several bytes can fall across two chunks.
+  const decoder = new StringDecoder('utf8')
+  let text = ''
+
+  stream?.on('data', (chunk: string | Buffer) => {
+    text += typeof chunk === 'string' ? chunk : decoder.write(chunk)
+  })
+
+  return () => text + decoder.end()
+}
+
+/**
+ * Describes the error that `spawnSync` returned. It sets that error also after
+ * the compiler started, when the system stopped it at a limit of the options.
+ *
+ * @param err - the error of the run
+ * @param pathToElm - the binary that was started
+ * @returns a stopped compiler for a timeout or a full buffer, and a compiler
+ * that did not start for anything else
+ */
+function syncRunError(err: Error, pathToElm: string): CompileError {
+  const code = 'code' in err ? err.code : undefined
+
+  switch (code) {
+    case 'ETIMEDOUT':
+      return { cause: err.message, kind: 'compilerStopped', original: err, pathToElm, reason: 'timeout' }
+    case 'ENOBUFS':
+      return { cause: err.message, kind: 'compilerStopped', original: err, pathToElm, reason: 'maxBuffer' }
+
+    default:
+      return startError(err, pathToElm)
+  }
+}
+
+/**
+ * Describes a compiler that a signal stopped while it ran.
+ *
+ * @param signal - the name of the signal, such as SIGTERM
+ * @param processOpts - the options of the process, which may set a timeout
+ * @param pathToElm - the binary that was started
+ * @returns a stopped compiler, with `timeout` as the reason when the signal is the one of the timeout
+ */
+function stoppedBySignal(signal: string, processOpts: CompilerOptions['processOpts'], pathToElm: string): CompileError {
+  // At the timeout Node sends killSignal, and reports only the signal, as for any other stop.
+  const timedOut = (processOpts?.timeout ?? 0) > 0 && signal === String(processOpts?.killSignal ?? 'SIGTERM')
+
+  return {
+    cause: signal,
+    kind: 'compilerStopped',
+    original: signal,
+    pathToElm,
+    reason: timedOut ? 'timeout' : 'signal',
+  }
 }
 
 /**
@@ -510,7 +578,7 @@ function asTerminalShows(stdout: string): string {
  */
 function temporaryOutput(suffix: string): Result<CompileError, string> {
   return Result.fromAttempt(() => makeTempOutputPathSync(suffix)).mapError((caught): CompileError => {
-    return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated' }
+    return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated', original: caught }
   })
 }
 
@@ -545,7 +613,7 @@ function startWorker(
     () => (require(file) as { Elm: Record<string, { init(args?: unknown): Partial<WorkerWithPorts> }> }).Elm
   )
     .mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file, kind: 'outputNotRead' }
+      return { cause: messageOf(caught), file, kind: 'outputNotRead', original: caught }
     })
     .andThen((elm): Result<CompileError, WorkerWithPorts> => {
       const module_ = elm[moduleName]
@@ -561,7 +629,7 @@ function startWorker(
 
       return Result.fromAttempt(() => module_.init(workerArgs))
         .mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: modulePath, kind: 'workerNotStarted', moduleName }
+          return { cause: messageOf(caught), file: modulePath, kind: 'workerNotStarted', moduleName, original: caught }
         })
         .andThen((worker): Result<CompileError, WorkerWithPorts> =>
           // Elm leaves `ports` out entirely when a module declares none.

@@ -19,7 +19,7 @@
  * @packageDocumentation
  */
 
-import type { ChildProcess } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 
 import { CliError, type Result } from '@elm-toolkit/cli-lib'
 
@@ -28,6 +28,7 @@ import { CompileError } from './compile-error.ts'
 import { findAllDependencies } from './find-elm-dependencies.ts'
 import {
   type CompilerOptions,
+  type CompilerSpawn,
   type CompilerSpawnSync,
   type SyncCompilerResult,
   elmBinaryName,
@@ -36,6 +37,7 @@ import {
   processArgs,
   spawnSyncAsCompilerSpawn,
   startErrorMessage,
+  systemMessages,
 } from './process.ts'
 import * as resultApi from './result-api.ts'
 
@@ -135,14 +137,19 @@ export function compileSync(sources: unknown, options: CompilerOptions): SyncCom
  * @returns the generated JavaScript
  */
 export async function compileToString(sources: unknown, options: CompilerOptions): Promise<string> {
-  const compiled = await resultApi.compileToString(legacySources(sources), options)
+  const remembered = rememberThrows((options.spawn ?? spawn) as CompilerSpawn)
+  const compiled = await resultApi.compileToString(legacySources(sources), { ...options, spawn: remembered.spawn })
 
-  // The original reported a compiler that did not start as a failed build, with the start message as output.
+  // The original let a throw of spawn pass, and reported a later start error or a stopped compiler as a failed build.
   return orThrow(
     compiled.mapError((error): CompileError => {
       switch (error.kind) {
         case 'compilerNotStarted':
-          return { exitCode: null, kind: 'compileFailed', output: legacyStartMessage(error), sources: [] }
+          return remembered.threw()
+            ? error
+            : { exitCode: null, kind: 'compileFailed', output: legacyStartMessage(error), sources: [] }
+        case 'compilerStopped':
+          return { exitCode: null, kind: 'compileFailed', output: '', sources: [] }
         case 'unknownOption':
         case 'compileFailed':
         case 'tempFolderNotCreated':
@@ -178,15 +185,19 @@ export async function compileToString(sources: unknown, options: CompilerOptions
  * @throws the string `'Compilation failed.'` when the compiler exits with an error
  */
 export function compileToStringSync(sources: unknown, options: CompilerOptions): string {
-  const compiled = resultApi.compileToStringSync(legacySources(sources), options)
+  const remembered = rememberThrows((options.spawn ?? spawnSyncAsCompilerSpawn) as CompilerSpawnSync)
+  const compiled = resultApi.compileToStringSync(legacySources(sources), { ...options, spawn: remembered.spawn })
 
   switch (compiled.tag) {
     case 'Ok':
       return compiled.value
     case 'Err':
       switch (compiled.error.kind) {
-        case 'compileFailed':
+        // The original let a throw of spawn pass, and reported a compiler that ran badly as a failed build.
         case 'compilerNotStarted':
+          throw remembered.threw() ? legacyError(compiled.error) : 'Compilation failed.'
+        case 'compileFailed':
+        case 'compilerStopped':
           throw 'Compilation failed.'
         case 'unknownOption':
         case 'tempFolderNotCreated':
@@ -277,6 +288,34 @@ export function _prepareProcessArgs(sources: unknown, options: CompilerOptions):
 export { findAllDependencies }
 
 /**
+ * Wraps a spawn function so that the old API knows whether it threw. The new
+ * API returns a throw of spawn and a start error emitted later as the same
+ * error, while the original package reported them in different ways. The
+ * wrapper goes only into the options of one call.
+ *
+ * @param spawnFunction - the spawn function of the options, or the default one
+ * @returns `spawn`, which behaves as the given function, and `threw`, which
+ * says whether a call of it threw
+ */
+function rememberThrows<A extends unknown[], R>(
+  spawnFunction: (...args: A) => R
+): { spawn: (...args: A) => R; threw: () => boolean } {
+  let threw = false
+
+  const remembering = (...args: A): R => {
+    try {
+      return spawnFunction(...args)
+    } catch (err: unknown) {
+      threw = true
+
+      throw err
+    }
+  }
+
+  return { spawn: remembering, threw: () => threw }
+}
+
+/**
  * Checks the sources at run time, as the original did for JavaScript callers.
  *
  * @param sources - what the caller passed
@@ -325,12 +364,15 @@ function legacyError(error: CompileError): unknown {
     case 'unknownOption':
       return new Error(legacyOptionMessage(error.option))
     case 'compilerNotStarted':
-      return legacyStartMessage(error)
+      // The original let an Error without a system code pass unchanged, for example one of a custom spawn.
+      return error.original instanceof Error && !('code' in error.original) ? error.original : legacyStartMessage(error)
     case 'compileFailed':
       return new Error(`Compilation failed\n${error.output}`)
+    case 'compilerStopped':
+      return new Error(error.cause)
     case 'tempFolderNotCreated':
     case 'outputNotRead':
-      return new Error(error.cause)
+      return error.original
     case 'moduleNotFound':
     case 'workerNotStarted':
     case 'noPorts':
@@ -361,15 +403,17 @@ function legacyOptionMessage(option: string): string {
 }
 
 /**
- * The message of the original package for a compiler that could not start.
+ * The message of the original package for a compiler that could not start,
+ * made from the original exception, as the original package made it.
  *
  * @param error - the compile error
  * @returns the message
  */
 function legacyStartMessage(error: Extract<CompileError, { kind: 'compilerNotStarted' }>): string {
-  return error.code
-    .map((code) => startErrorMessage({ code, toString: () => error.cause }, error.pathToElm))
-    .withDefault(startErrorMessage({ message: error.cause }, error.pathToElm))
+  // `compile` already gave an emitted error the message of the original package.
+  return error.original instanceof Error && systemMessages.has(error.original)
+    ? error.original.message
+    : startErrorMessage(error.original, error.pathToElm)
 }
 
 /**
@@ -402,6 +446,7 @@ function workerMessage(error: CompileError): unknown {
       return `Error: ${error.cause}`
     case 'unknownOption':
     case 'compilerNotStarted':
+    case 'compilerStopped':
     case 'tempFolderNotCreated':
     case 'outputNotRead':
     case 'entryNotRead':

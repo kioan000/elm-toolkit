@@ -59,6 +59,8 @@ export interface CompilerProcessLike {
 export interface CompilerProcessOptions extends SpawnOptions {
   cwd?: string
   env?: NodeJS.ProcessEnv
+  /** The most bytes that a synchronous run captures from the compiler; only the `Sync` functions use it. */
+  maxBuffer?: number
 }
 
 /** The process options of a synchronous run, which can also choose an encoding. */
@@ -288,6 +290,7 @@ export function startError(err: unknown, pathToElm: string): CompileError {
     cause: err instanceof Error ? (systemMessages.get(err) ?? err.message) : String(err),
     code: code === '' ? Maybe.Nothing : Maybe.Just(code),
     kind: 'compilerNotStarted',
+    original: err,
     pathToElm,
   }
 }
