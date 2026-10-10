@@ -143,6 +143,14 @@ packages again.
 Node 24, and an `elm` binary on the `PATH` or given with `pathToElm`. The package
 is compiled to `dist/` and published as JavaScript.
 
+Inside this monorepo, a script prints every message of the package, each error
+as a command line tool prints it and every line that reaches the console. Run it
+after a change to a message, to read the result:
+
+```sh
+corepack yarn workspace @elm-toolkit/node-elm-compiler messages
+```
+
 ## Thanks
 
 This package stands on the work of Richard Feldman and of everyone who

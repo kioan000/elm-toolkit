@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
+    "messages": "tsc -p scripts/tsconfig.json && node scripts/messages.ts",
     "prepare": "yarn build",
     "test": "tsc -p test/tsconfig.json && node --test --test-concurrency=1 \"test/**/*.test.ts\""
   },
