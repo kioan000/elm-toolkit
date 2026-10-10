@@ -8,11 +8,20 @@
  * file in one of the source directories. Imports from packages resolve to nothing
  * and are skipped.
  *
+ * `findDependencies` returns a `Result`, with a `CompileError` when the search
+ * cannot start. `findAllDependencies` is the function of the original package,
+ * kept for compatibility: it logs that error and returns the dependencies it
+ * already knew.
+ *
  * @packageDocumentation
  */
 
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import * as path from 'node:path'
+
+import { CliError, Result } from '@elm-toolkit/cli-lib'
+
+import { CompileError } from './compile-error.ts'
 
 /**
  * The `elm.json` that lists a source directory, and the source directories it
@@ -147,32 +156,37 @@ class Parser {
 }
 
 /**
- * Extract the module name from the first line of an Elm file.
+ * Finds the source directory of an Elm file from its module declaration: the
+ * module `Page.Home` in `src/Page/Home.elm` gives `src`.
  *
- * @param file - Path to the Elm file
- * @returns Promise resolving to the base directory for imports
+ * @param file - path to the Elm file
+ * @returns `Ok` the base directory for imports, or `Err` when the file cannot be
+ * read or its first line is not a module declaration
  */
-async function getBaseDir(file: string): Promise<string> {
-  const firstLine = await readFirstLine(file)
+async function baseDirOf(file: string): Promise<Result<CompileError, string>> {
+  const firstLine = (await Result.fromPromise(readFirstLine(file))).mapError((caught): CompileError => {
+    return {
+      cause: caught instanceof Error ? caught.message : String(caught),
+      file,
+      kind: 'entryNotRead',
+      original: caught,
+    }
+  })
 
-  const matches = firstLine.match(/^(?:port\s+)?module\s+([^\s]+)/)
+  return firstLine.andThen((line): Result<CompileError, string> => {
+    const matches = line.match(/^(?:port\s+)?module\s+([^\s]+)/)
 
-  if (matches) {
-    const moduleName = matches[1]
-    const dependencyLogicalName = moduleName.replace(/\./g, '/')
-    const backedOut = dependencyLogicalName.replace(/[^/]+/g, '..')
-    const trimmedBackedOut = backedOut.replace(/^\.\./, '')
+    if (matches) {
+      const dependencyLogicalName = matches[1].replace(/\./g, '/')
+      const backedOut = dependencyLogicalName.replace(/[^/]+/g, '..')
 
-    return path.normalize(path.dirname(file) + trimmedBackedOut)
-  }
+      return Result.Ok(path.normalize(path.dirname(file) + backedOut.replace(/^\.\./, '')))
+    }
 
-  if (!firstLine.match(/^(?:port\s+)?module\s/)) {
-    return path.dirname(file)
-  }
-
-  throw new Error(
-    `${file} is not a syntactically valid Elm module. Try running \`elm make\` on it manually to figure out what the problem is.`
-  )
+    return line.match(/^(?:port\s+)?module\s/)
+      ? Result.Err({ file, kind: 'invalidModule' })
+      : Result.Ok(path.dirname(file))
+  })
 }
 
 /**
@@ -409,9 +423,12 @@ function getCachedElmPackageSourceDirectories(baseDir: string): ReadonlyArray<st
     return []
   }
 
-  const { mtimeMs, size } = statSync(match.elmJsonPath)
+  const stats = statSync(match.elmJsonPath, { throwIfNoEntry: false })
 
-  sourceDirectoriesCache.set(resolvedBaseDir, { ...match, modifiedAt: mtimeMs, size })
+  // elm.json can disappear between the read and this call; its directories are still valid, but not cached.
+  if (stats !== undefined) {
+    sourceDirectoriesCache.set(resolvedBaseDir, { ...match, modifiedAt: stats.mtimeMs, size: stats.size })
+  }
 
   return match.sourceDirectories
 }
@@ -435,9 +452,56 @@ function isUnchanged(cached: CachedElmJsonMatch): boolean {
  * from the entry file and does not report which files it read.
  *
  * Imports of `Native.*` modules resolve to `.js` files, as they did before Elm
- * 0.19. A file that cannot be read is dropped from the result. When the search
- * fails, for example because the entry file does not exist, the error is logged
- * and `knownDependencies` is returned unchanged.
+ * 0.19. A file that cannot be read further down is dropped from the result.
+ *
+ * @example
+ *
+ * Find what a page depends on
+ * ```TypeScript
+ *   const dependenciesSearchResult = await findDependencies('/app/src/Page/Home.elm')
+ *   // Ok ['/app/src/Api.elm', '/app/src/Ui/Button.elm']
+ * ```
+ *
+ * @param file - the absolute path of the Elm module to start from
+ * @param knownDependencies - dependencies found earlier, which are kept in the result
+ * @param sourceDirectories - the absolute source directories; when absent they come from `elm.json`
+ * @param knownFiles - files already visited, which are not read again
+ * @returns `Ok` the absolute paths of the dependencies, where `file` itself is
+ * absent unless an import cycle, which Elm rejects, leads back to it; or `Err`
+ * when the entry file cannot be read or is not an Elm module
+ */
+export async function findDependencies(
+  file: string,
+  knownDependencies: ReadonlyArray<string> = [],
+  sourceDirectories?: ReadonlyArray<string>,
+  knownFiles: ReadonlyArray<string> = []
+): Promise<Result<CompileError, ReadonlyArray<string>>> {
+  const search = async (directories: ReadonlyArray<string>): Promise<ReadonlyArray<string>> =>
+    (await findAllDependenciesHelp(file, new Set(knownDependencies), directories, new Set(knownFiles)))
+      .knownDependencies
+
+  if (sourceDirectories) {
+    return Result.Ok(await search(sourceDirectories))
+  }
+
+  const baseDir = await baseDirOf(file)
+
+  switch (baseDir.tag) {
+    case 'Ok':
+      return Result.Ok(await search(getCachedElmPackageSourceDirectories(baseDir.value)))
+    case 'Err':
+      return Result.Err(baseDir.error)
+  }
+}
+
+/**
+ * Lists every local file that an Elm module imports, as `findDependencies`
+ * does, but with the behaviour of the original package: when the search fails,
+ * for example because the entry file does not exist, the error is logged and
+ * `knownDependencies` is returned unchanged.
+ *
+ * @deprecated Use `findAllDependencies` of `@elm-toolkit/node-elm-compiler/result-api`, which returns a `Result`
+ * instead of logging the error.
  *
  * @example
  *
@@ -460,24 +524,14 @@ export async function findAllDependencies(
   sourceDirectories?: ReadonlyArray<string>,
   knownFiles: ReadonlyArray<string> = []
 ): Promise<ReadonlyArray<string>> {
-  const knownDependenciesSet = new Set(knownDependencies)
-  const knownFilesSet = new Set(knownFiles)
+  const found = await findDependencies(file, knownDependencies, sourceDirectories, knownFiles)
 
-  if (sourceDirectories) {
-    const result = await findAllDependenciesHelp(file, knownDependenciesSet, sourceDirectories, knownFilesSet)
+  switch (found.tag) {
+    case 'Ok':
+      return found.value
+    case 'Err':
+      console.error(`Error finding dependencies for ${file}:`, CliError.toString(CompileError.toCliError(found.error)))
 
-    return result.knownDependencies
-  }
-
-  try {
-    const baseDir = await getBaseDir(file)
-    const newSourceDirs = getCachedElmPackageSourceDirectories(baseDir)
-    const result = await findAllDependenciesHelp(file, knownDependenciesSet, newSourceDirs, knownFilesSet)
-
-    return result.knownDependencies
-  } catch (err) {
-    console.error(`Error finding dependencies for ${file}:`, err)
-
-    return knownDependencies
+      return knownDependencies
   }
 }

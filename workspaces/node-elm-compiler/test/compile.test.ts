@@ -9,6 +9,8 @@
  * @packageDocumentation
  */
 
+/* eslint-disable import-x/no-deprecated -- these tests check the deprecated API, which stays until it is removed */
+
 import type { ChildProcess } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,6 +38,12 @@ const inApp: CompilerOptions = { cwd: app, pathToElm: elm }
 
 // Present only when Elm adds the debugger; the name alone also appears in builds without it.
 const debuggerDefinition = /var _Debugger_element = F4/
+
+// A spawn option that fails before it starts anything, with an Error that has no system code.
+const ownError = new Error('the build server is offline')
+const failingSpawn = (): never => {
+  throw ownError
+}
 
 /**
  * Waits until a compiler process has closed.
@@ -157,6 +165,26 @@ describe('compile', () => {
     }
   })
 
+  it('lets an Error of a custom spawn pass unchanged', () => {
+    assert.throws(
+      () => compile(source('Main'), { ...inApp, spawn: failingSpawn }),
+      (thrown) => thrown === ownError
+    )
+  })
+
+  it('describes a value of a custom spawn that is not an Error, as the original did', () => {
+    assert.throws(
+      () =>
+        compile(source('Main'), {
+          ...inApp,
+          spawn: () => {
+            throw 'the build server is offline'
+          },
+        }),
+      (thrown) => thrown === `Exception thrown when attempting to run Elm compiler ${JSON.stringify(elm)}`
+    )
+  })
+
   it('reports a missing binary as an error event instead of crashing the process', async () => {
     const result = await settle(compile('src/Main.elm', { pathToElm: missingElm, processOpts: { stdio: 'pipe' } }))
 
@@ -240,6 +268,19 @@ describe('compileToString', () => {
     })
   })
 
+  it('rejects with the Error of a custom spawn, unchanged', async () => {
+    await assert.rejects(
+      compileToString(source('Main'), { ...inApp, spawn: failingSpawn }),
+      (thrown) => thrown === ownError
+    )
+  })
+
+  it('rejects as a failed build when the compiler reaches the timeout', async () => {
+    await assert.rejects(compileToString(source('Main'), { ...inApp, processOpts: { timeout: 1 } }), {
+      message: 'Compilation failed\n',
+    })
+  })
+
   it('rejects with a readable message when the binary is missing', async () => {
     await assert.rejects(
       compileToString(source('Main'), { ...inApp, pathToElm: missingElm }),
@@ -271,6 +312,20 @@ describe('compileSync and compileToStringSync', () => {
     assert.throws(
       () => compileToStringSync(source('Broken'), quiet),
       (thrown) => thrown === 'Compilation failed.'
+    )
+  })
+
+  it('throws the same message when the binary is missing', () => {
+    assert.throws(
+      () => compileToStringSync(source('Main'), { ...quiet, pathToElm: missingElm }),
+      (thrown) => thrown === 'Compilation failed.'
+    )
+  })
+
+  it('throws the Error of a custom spawn, unchanged', () => {
+    assert.throws(
+      () => compileToStringSync(source('Main'), { ...quiet, spawn: failingSpawn }),
+      (thrown) => thrown === ownError
     )
   })
 })

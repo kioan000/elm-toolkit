@@ -40,24 +40,25 @@ describe('CliError', () => {
     mock.restoreAll()
   })
 
-  it('keeps the summary and the details that create receives, without a solution or a trace', () => {
-    assert.deepEqual(CliError.create({ details: ['check the path'], summary: 'No patches at nowhere.' }), {
-      details: ['check the path'],
+  it('keeps the summary and what happened as create receives them, without a solution or a trace', () => {
+    assert.deepEqual(CliError.create({ summary: 'No patches at nowhere.', whatHappened: ['check the path'] }), {
+      details: [],
       solution: Maybe.Nothing,
       summary: 'No patches at nowhere.',
       trace: Maybe.Nothing,
+      whatHappened: ['check the path'],
     })
   })
 
-  it('takes the details of an error of the system from its message, without a trace', () => {
+  it('takes what happened from the message of an error of the system, without a trace', () => {
     const missing = Object.assign(new Error("ENOENT: no such file or directory, open 'elm.json'"), { code: 'ENOENT' })
     const error = CliError.fromUnknown('could not read elm.json', missing)
 
-    assert.deepEqual(error.details, ["ENOENT: no such file or directory, open 'elm.json'"])
+    assert.deepEqual(error.whatHappened, ["ENOENT: no such file or directory, open 'elm.json'"])
     assert.deepEqual(error.trace, Maybe.Nothing)
   })
 
-  it('takes the details of a failed child process from its standard error, without a trace', () => {
+  it('takes what happened from the standard error of a failed child process, without a trace', () => {
     const caught = Result.fromAttempt(() => execFileSync('git', ['no-such-command'], { stdio: 'pipe' }))
 
     switch (caught.tag) {
@@ -66,7 +67,7 @@ describe('CliError', () => {
       case 'Err': {
         const error = CliError.fromUnknown('git failed', caught.error)
 
-        assert.match(error.details.join('\n'), /no-such-command/)
+        assert.match(error.whatHappened.join('\n'), /no-such-command/)
 
         return assert.deepEqual(error.trace, Maybe.Nothing)
       }
@@ -76,7 +77,7 @@ describe('CliError', () => {
   it('keeps the stack of an exception that looks like a bug as the trace', () => {
     const error = CliError.fromUnknown('could not compare the files', new TypeError('list is not iterable'))
 
-    assert.deepEqual(error.details, ['list is not iterable'])
+    assert.deepEqual(error.whatHappened, ['list is not iterable'])
 
     switch (error.trace.tag) {
       case 'Just':
@@ -97,16 +98,16 @@ describe('CliError', () => {
     }
   })
 
-  it('turns a thrown value that is not an Error into details', () => {
-    assert.deepEqual(CliError.fromUnknown('failed', 'a thrown text').details, ['a thrown text'])
+  it('turns a thrown value that is not an Error into what happened', () => {
+    assert.deepEqual(CliError.fromUnknown('failed', 'a thrown text').whatHappened, ['a thrown text'])
   })
 
   it('turns into text with a blank line between the summary and each section', () => {
     const error = CliError.withSolution(
       CliError.create({
-        details: ['in elm-kernel-patcher'],
         solution: 'first',
         summary: 'patches.tar.gz does not exist.',
+        whatHappened: ['in elm-kernel-patcher'],
       }),
       'cli-elm-kernel-patcher archive build'
     )

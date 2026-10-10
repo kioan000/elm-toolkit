@@ -18,8 +18,9 @@
  *
  * The ones that create or combine results live on `Result` itself: `Ok`, `Err`,
  * `fromMaybe`, `map2` to `map5`, with the results first and the function last,
- * and `fromAttempt`. Elm has no `fromAttempt`, because Elm code never throws; it
- * turns a call that can throw into a result.
+ * and `fromAttempt` and `fromPromise`. Elm has neither, because Elm code never
+ * throws; they turn a call that can throw, or a promise that can reject, into a
+ * result.
  *
  * @packageDocumentation
  */
@@ -296,6 +297,29 @@ function fromAttempt<A>(work: () => A): Result<unknown, A> {
 }
 
 /**
+ * Waits for a promise, and returns its outcome instead of rejecting. The reason
+ * of a rejection is kept as it is, as `unknown`, like in `fromAttempt`.
+ *
+ * @example
+ *
+ * Read a file without a try block
+ * ```TypeScript
+ *   const read = await Result.fromPromise(readFile('elm.json', 'utf8'))
+ *   // Ok '{ … }', or Err with the reason, for example an ENOENT error
+ * ```
+ *
+ * @param promise - the work to wait for, which may reject
+ * @returns a promise of `Ok` with the value, or `Err` with the reason of the rejection
+ */
+async function fromPromise<A>(promise: Promise<A>): Promise<Result<unknown, A>> {
+  try {
+    return Ok(await promise)
+  } catch (caught) {
+    return Err(caught)
+  }
+}
+
+/**
  * Turns a missing value into an error.
  *
  * @example
@@ -437,4 +461,4 @@ function map5<E, A, B, C, D, F, V>(
  *     .mapError((caught) => CliError.fromUnknown('could not read elm.json', caught))
  * ```
  */
-export const Result = { Err, fromAttempt, fromMaybe, map2, map3, map4, map5, Ok }
+export const Result = { Err, fromAttempt, fromMaybe, fromPromise, map2, map3, map4, map5, Ok }

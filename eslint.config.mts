@@ -7,8 +7,11 @@ import globals from 'globals'
 
 export default tseslint.config(
   {
+    // Alone in its object, so that ESLint skips these files everywhere instead of linting them with no rules.
     // The hot reload runtime is vendored code that is injected as text, not a module of this repository.
     ignores: ['**/node_modules/**', '**/dist/**', 'eslint.config.mts', 'workspaces/webpack-elm-loader/hot/runtime.js'],
+  },
+  {
     plugins: {
       '@typescript-eslint': tseslint.plugin,
       '@stylistic': stylistic,

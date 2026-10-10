@@ -156,17 +156,17 @@ export function patchKernel(options: PatchOptions = {}): Result<CliError, PatchR
     const copied = packages.filter((each) => each.copied).length
 
     return CliSuccess.create({
-      details: [
-        ...packages.map(({ copied: wasCopied, name, version }) =>
-          wasCopied ? `${name} ${version}: patched` : `${name} ${version}: already patched`
-        ),
-        ...(cleared ? [`Removed ${shown(cache)}, so that Elm compiles the project again with the patches.`] : []),
-      ],
       next: cleared ? 'Compile the project as usual. Elm now uses the patched packages.' : undefined,
       summary:
         copied > 0
           ? `Patched ${copied} of ${packages.length} kernel packages in ${shown(elmHome)}.`
           : `The Elm home ${shown(elmHome)} already has the patches.`,
+      whatHappened: [
+        ...packages.map(({ copied: wasCopied, name, version }) =>
+          wasCopied ? `${name} ${version}: patched` : `${name} ${version}: already patched`
+        ),
+        ...(cleared ? [`Removed ${shown(cache)}, so that Elm compiles the project again with the patches.`] : []),
+      ],
     })
   })
 }
@@ -344,9 +344,9 @@ function readElmVersion(elmJsonPath: string, bundledPatches: boolean): Result<Cl
         ? Result.Ok(elmVersion)
         : Result.Err(
             CliError.create({
-              details: [`file: ${shown(elmJsonPath)}`],
               solution: `Use Elm ${supported.join(' or ')}, or give patches made for Elm ${elmVersion} with \`--patches <folder>\`.`,
               summary: `The patches support Elm ${supported.join(' and ')}, but elm.json declares ${elmVersion}.`,
+              whatHappened: [`file: ${shown(elmJsonPath)}`],
             })
           )
   )
@@ -374,9 +374,9 @@ function readDependencies(elmJsonPath: string): Result<CliError, Record<string, 
         ? Result.Ok({ ...dependencies.direct, ...dependencies.indirect })
         : Result.Err(
             CliError.create({
-              details: [`the patcher needs the direct and indirect dependencies that an application pins`],
               solution: 'Run the patcher on the application that uses this package, not on the package itself.',
               summary: `${shown(elmJsonPath)} is not the elm.json of an application.`,
+              whatHappened: [`the patcher needs the direct and indirect dependencies that an application pins`],
             })
           )
     })
@@ -406,10 +406,10 @@ function checkLayout(patchDir: string, origin: string): Result<CliError, void> {
     ? Result.Ok(undefined)
     : Result.Err(
         CliError.create({
-          details: [`for example elm/core/1.0.5/source.txt`],
           solution:
             'Create the archive from the folder that holds patches/, with `tar -czf patches.tar.gz patches`, or build it with `cli-elm-kernel-patcher archive build`.',
           summary: `The patches at ${shown(origin)} do not follow the layout <author>/<package>/<version>/source.txt.`,
+          whatHappened: [`for example elm/core/1.0.5/source.txt`],
         })
       )
 }
@@ -499,9 +499,9 @@ function checkVersion(
   if (versions.length !== 1 || version === undefined) {
     return Result.Err(
       CliError.create({
-        details: [`versions: ${versions.map((each) => each.name).join(', ')}`],
         solution: `Keep one version folder for ${package_.name} and delete the others.`,
         summary: `${package_.name} has ${versions.length} versions in the patches; it needs exactly one.`,
+        whatHappened: [`versions: ${versions.map((each) => each.name).join(', ')}`],
       })
     )
   }

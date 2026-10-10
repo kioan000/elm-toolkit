@@ -1,10 +1,12 @@
 /**
  * The error of a command line step, made to be read by a person.
  *
- * A `CliError` has four parts. The summary is one line that says what failed.
- * The details are the lines that explain why. The solution, when there is one,
- * says what to do next. The trace is the stack of an exception that looks like
- * a bug, so that it can be reported. A step that can fail returns
+ * A `CliError` has five parts, named after the sections that `print` shows.
+ * The summary is one line that says what failed. What happened is the lines
+ * that explain why. The details, when there are any, hold the messages of
+ * another program, such as a compiler, as that program wrote them. The solution, when there is one, says what to do next. The trace
+ * is the stack of an exception that looks like a bug, so that it can be
+ * reported. A step that can fail returns
  * `Result<CliError, A>`, and the function that runs the command prints the
  * error once, with `print`.
  *
@@ -28,6 +30,7 @@ import { Maybe } from './maybe.ts'
  * Describe a manifest that is missing
  * ```TypeScript
  *   const missing: CliError = {
+ *     whatHappened: [],
  *     details: [],
  *     solution: Maybe.Just('cli-elm-kernel-patcher archive init'),
  *     summary: 'elm-kernel-patcher/elm-kernel-patcher.json does not exist.',
@@ -36,7 +39,7 @@ import { Maybe } from './maybe.ts'
  * ```
  */
 export type CliError = {
-  /** The lines that explain why the step failed. */
+  /** The messages of another program, such as a compiler, kept as that program wrote them. */
   readonly details: ReadonlyArray<string>
   /** What to do next, when the step knows it. */
   readonly solution: Maybe<string>
@@ -44,11 +47,13 @@ export type CliError = {
   readonly summary: string
   /** The stack of an exception that looks like a bug, not like a problem of the system. */
   readonly trace: Maybe<string>
+  /** The lines that explain why the step failed. */
+  readonly whatHappened: ReadonlyArray<string>
 }
 
 /**
- * Builds an error. Only the summary is required; the details and the solution
- * are optional. The trace is left out, because only `fromUnknown` can tell
+ * Builds an error. Only the summary is required; what happened, the details
+ * and the solution are optional. The trace is left out, because only `fromUnknown` can tell
  * whether an exception looks like a bug.
  *
  * @example
@@ -61,22 +66,29 @@ export type CliError = {
  *   })
  * ```
  *
- * @param parts - the summary, what failed in one line; the details, the lines
- * that explain why; and the solution, what to do next
+ * @param parts - the summary, what failed in one line; what happened, the lines
+ * that explain why; the details, the messages of another program; and the
+ * solution, what to do next
  * @returns the error
  */
-function create(parts: { details?: ReadonlyArray<string>; solution?: string; summary: string }): CliError {
+function create(parts: {
+  details?: ReadonlyArray<string>
+  solution?: string
+  summary: string
+  whatHappened?: ReadonlyArray<string>
+}): CliError {
   return {
     details: parts.details ?? [],
     solution: parts.solution === undefined ? Maybe.Nothing : Maybe.Just(parts.solution),
     summary: parts.summary,
     trace: Maybe.Nothing,
+    whatHappened: parts.whatHappened ?? [],
   }
 }
 
 /**
  * Turns an exception that a step caught into an error for a person. The
- * message of the exception becomes the details; a failed child process gives
+ * message of the exception becomes what happened; a failed child process gives
  * its standard error instead, which says more than its exit code.
  *
  * An error of the system, such as a missing file (`ENOENT`), a failed child
@@ -89,23 +101,23 @@ function create(parts: { details?: ReadonlyArray<string>; solution?: string; sum
  * Describe a file that could not be read
  * ```TypeScript
  *   Result.fromAttempt(read).mapError((caught) => CliError.fromUnknown('could not read elm.json', caught))
- *   // Err { summary: 'could not read elm.json', details: ["ENOENT: no such file or directory, open 'elm.json'"], … }
+ *   // Err { summary: 'could not read elm.json', whatHappened: ["ENOENT: no such file or directory, open 'elm.json'"], … }
  * ```
  *
  * @param summary - what failed, in one line
  * @param caught - the exception, of any type
- * @returns the error, with the lines of the cause as details, and a trace for a likely bug
+ * @returns the error, with the lines of the cause as what happened, and a trace for a likely bug
  */
 function fromUnknown(summary: string, caught: unknown): CliError {
   if (!(caught instanceof Error)) {
-    return create({ details: String(caught).split('\n'), summary })
+    return create({ summary, whatHappened: String(caught).split('\n') })
   }
 
   const stderr = 'stderr' in caught ? String(caught.stderr).trim() : ''
   // JSON.parse throws a SyntaxError for a file that a person wrote, so it is a problem of the input.
   const fromTheSystem = 'code' in caught || 'status' in caught || stderr !== '' || caught instanceof SyntaxError
   const [, ...stack] = (caught.stack ?? '').split('\n')
-  const error = create({ details: (stderr !== '' ? stderr : caught.message).split('\n'), summary })
+  const error = create({ summary, whatHappened: (stderr !== '' ? stderr : caught.message).split('\n') })
 
   return fromTheSystem || stack.length === 0
     ? error
@@ -132,7 +144,9 @@ function withSolution(error: CliError, solution: string): CliError {
 
 /**
  * Lists the sections of an error, in the order they are shown: what happened,
- * how to fix it, and the stack trace. Only the label of the solution is green,
+ * the details from another program, how to fix it, and the stack trace. The
+ * details keep their lines as they are, because that program already chose
+ * their layout. Only the label of the solution is green,
  * so that it stands out; the stack trace is grey, because it is for a bug
  * report.
  *
@@ -141,7 +155,8 @@ function withSolution(error: CliError, solution: string): CliError {
  */
 function sections(error: CliError): ReadonlyArray<Section> {
   return [
-    { label: 'What happened:', lines: error.details },
+    { label: 'What happened:', lines: error.whatHappened },
+    { keepLines: true, label: 'Details:', lines: error.details },
     { label: 'How to fix:', labelColor: '\x1b[32m', lines: error.solution.map((text) => [text]).withDefault([]) },
     {
       label: 'Stack trace:',
@@ -175,9 +190,9 @@ function toString(error: CliError): string {
 /**
  * Prints an error the way every command of the toolkit does. The first line
  * holds the title and the summary, highlighted in red. Below it come the
- * sections that have content, each after a blank line: "What happened:" with
- * the details, "How to fix:" with the solution, its label in green, and
- * "Stack trace:" with the stack in grey.
+ * sections that have content, each after a blank line: "What happened:",
+ * "Details:" with the messages of another program, "How to fix:" with the
+ * solution, its label in green, and "Stack trace:" with the stack in grey.
  *
  * @example
  *

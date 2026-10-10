@@ -15,14 +15,14 @@ describe('CliSuccess', () => {
     mock.restoreAll()
   })
 
-  it('keeps the summary, the details and the next step that create receives', () => {
+  it('keeps the summary, what happened and the next step that create receives', () => {
     assert.deepEqual(CliSuccess.create({ summary: 'The archive matches the manifest.' }), {
-      details: [],
       next: Maybe.Nothing,
       summary: 'The archive matches the manifest.',
+      whatHappened: [],
     })
     assert.deepEqual(
-      CliSuccess.create({ details: ['elm/core 1.0.5'], next: 'Patch.', summary: 'Built.' }).next,
+      CliSuccess.create({ next: 'Patch.', summary: 'Built.', whatHappened: ['elm/core 1.0.5'] }).next,
       Maybe.Just('Patch.')
     )
   })
@@ -33,9 +33,9 @@ describe('CliSuccess', () => {
     CliSuccess.print(
       'archive build',
       CliSuccess.create({
-        details: ['elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e'],
         next: 'Give the folder to the patcher.',
         summary: 'Built elm-kernel-patcher/patches.tar.gz from 1 commits.',
+        whatHappened: ['elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e'],
       })
     )
 

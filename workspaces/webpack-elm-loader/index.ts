@@ -21,7 +21,8 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import type { LoaderContext } from 'webpack'
 
-import { compile, findAllDependencies } from '@elm-toolkit/node-elm-compiler'
+import { CliError } from '@elm-toolkit/cli-lib'
+import { CompileError, compile, findAllDependencies } from '@elm-toolkit/node-elm-compiler/result-api'
 
 import { inject } from './hot/inject.ts'
 
@@ -162,10 +163,29 @@ function filesToWatch(cwd: string): string[] {
  *
  * @param resourcePath - Current resource being compiled
  * @param files - Files to analyze
+ * @param warn - Receives the message of a file whose dependencies could not be found
  * @returns Promise resolving to unique dependencies
  */
-async function dependenciesFor(resourcePath: string, files: string[]): Promise<string[]> {
-  const dependenciesPerFile = await Promise.all(files.map((file) => findAllDependencies(file)))
+async function dependenciesFor(
+  resourcePath: string,
+  files: string[],
+  warn: (message: string) => void
+): Promise<string[]> {
+  const dependenciesPerFile = await Promise.all(
+    files.map(async (file) => {
+      const found = await findAllDependencies(file)
+
+      switch (found.tag) {
+        case 'Ok':
+          return found.value
+        case 'Err':
+          // The build still runs, and elm make reports the same problem with its own message.
+          warn(CliError.toString(CompileError.toCliError(found.error)))
+
+          return []
+      }
+    })
+  )
 
   const allDependencies = flatten(dependenciesPerFile)
 
@@ -242,36 +262,42 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
       processOpts: { stdio: 'inherit' as const, ...env },
     }
 
-    try {
-      const compiler = compile(sources, finalOptions)
+    const started = compile(sources, finalOptions)
 
-      compiler.on('close', (exitCode: unknown) => {
-        if (exitCode !== 0) {
-          fs.rmSync(tempDir, { force: true, recursive: true })
-          reject(new Error('Compilation failed'))
-
-          return
-        }
-
-        fs.readFile(outputPath, { encoding: 'utf8' }, (err, data) => {
-          // Clean up temp directory
-          fs.rmSync(tempDir, { force: true, recursive: true })
-
-          if (err) {
-            reject(err)
-          } else {
-            resolve(data)
-          }
-        })
-      })
-
-      compiler.on('error', (err) => {
+    switch (started.tag) {
+      case 'Err':
         fs.rmSync(tempDir, { force: true, recursive: true })
-        reject(err)
-      })
-    } catch (compileError) {
-      fs.rmSync(tempDir, { force: true, recursive: true })
-      reject(compileError)
+        reject(new Error(CliError.toString(CompileError.toCliError(started.error))))
+
+        return
+      case 'Ok': {
+        const compiler = started.value
+
+        compiler.on('close', (exitCode: unknown) => {
+          if (exitCode !== 0) {
+            fs.rmSync(tempDir, { force: true, recursive: true })
+            reject(new Error('Compilation failed'))
+
+            return
+          }
+
+          fs.readFile(outputPath, { encoding: 'utf8' }, (err, data) => {
+            // Clean up temp directory
+            fs.rmSync(tempDir, { force: true, recursive: true })
+
+            if (err) {
+              reject(err)
+            } else {
+              resolve(data)
+            }
+          })
+        })
+
+        compiler.on('error', (err) => {
+          fs.rmSync(tempDir, { force: true, recursive: true })
+          reject(err)
+        })
+      }
     }
   })
 }
@@ -347,7 +373,9 @@ export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOpti
       }
 
       // Find all dependencies and add them to watch list
-      const dependenciesPromise = dependenciesFor(resourcePath, files)
+      const dependenciesPromise = dependenciesFor(resourcePath, files, (message) => {
+        this.emitWarning(new Error(message))
+      })
         .then((deps) => {
           deps.forEach((dep) => {
             this.addDependency(dep)

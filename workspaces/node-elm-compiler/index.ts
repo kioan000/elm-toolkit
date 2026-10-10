@@ -1,152 +1,47 @@
 /**
- * Runs the Elm compiler from Node. This is a fork of the `node-elm-compiler` npm
- * package, rewritten in TypeScript with no runtime dependencies. The API is the
- * same, so code written for the original works with it.
+ * Runs the Elm compiler from Node, with the API of the `node-elm-compiler` npm
+ * package, so code written for the original works with it.
  *
- * Every function here is a wrapper around one `elm make` call. The option bag
- * becomes command line flags, and the compiler runs as a child process. Start
- * with `compile`, which returns that process. `compileToString` builds on it and
- * returns the generated JavaScript instead. The `Sync` variants block until the
- * compiler exits.
+ * This API is deprecated. Every function here throws or rejects when something
+ * fails, as the original did. The API at `@elm-toolkit/node-elm-compiler/result-api`
+ * has the same names and options, and returns each failure as a `Result`
+ * instead; it also adds `dryCompile`, which checks a program without writing
+ * any output. The functions here are thin wrappers around it: they call the
+ * new function and turn its error back into the message that the original
+ * threw.
  *
- * `findAllDependencies` answers a question that `elm make` does not: which local
- * files an Elm module imports, directly or through other modules. A bundler in
- * watch mode needs that list to know which changes require a new build.
- *
- * `compileWorker` compiles a headless Elm program and starts it in this process,
- * for tools that talk to Elm code through ports.
+ * Start with `compile`, which returns the compiler process. `compileToString`
+ * returns the generated JavaScript instead, and the `Sync` variants block until
+ * the compiler exits. `findAllDependencies` lists the local files that an Elm
+ * module imports, and `compileWorker` starts a headless Elm program in this
+ * process.
  *
  * @packageDocumentation
  */
 
-import { type ChildProcess, type SpawnOptions, type SpawnSyncReturns, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
-import * as path from 'node:path'
-import * as process from 'node:process'
+import { type ChildProcess, spawn } from 'node:child_process'
+
+import { CliError, type Result } from '@elm-toolkit/cli-lib'
+
+import { CompileError } from './compile-error.ts'
+// eslint-disable-next-line import-x/no-deprecated -- the old API keeps exporting the old function
 import { findAllDependencies } from './find-elm-dependencies.ts'
+import {
+  type CompilerOptions,
+  type CompilerSpawn,
+  type CompilerSpawnSync,
+  type SyncCompilerResult,
+  elmBinaryName,
+  prepareOptions,
+  prepareProcessOpts,
+  processArgs,
+  spawnSyncAsCompilerSpawn,
+  startErrorMessage,
+  systemMessages,
+} from './process.ts'
+import * as resultApi from './result-api.ts'
 
-// The compiler writes a script that assigns to `this.Elm`, which only a CommonJS
-// loader runs correctly, so the worker is loaded with `require` and not `import`.
-const require = createRequire(import.meta.url)
-
-const elmBinaryName = 'elm'
-const jsEmitterFilename = 'emitter.js'
-const knownModules = [
-  'fullscreen',
-  'embed',
-  'worker',
-  'Basics',
-  'Maybe',
-  'List',
-  'Array',
-  'Char',
-  'Color',
-  'Transform2D',
-  'Text',
-  'Graphics',
-  'Debug',
-  'Result',
-  'Task',
-  'Signal',
-  'String',
-  'Dict',
-  'Json',
-  'Regex',
-  'VirtualDom',
-  'Html',
-  'Css',
-] as const
-
-type Sources = unknown
-
-type SyncCompilerResult = SpawnSyncReturns<string | Buffer>
-
-interface CompilerProcessLike {
-  on(event: string, listener: (...args: unknown[]) => void): CompilerProcessLike
-  stderr?: NodeJS.ReadableStream | null
-  stdout?: NodeJS.ReadableStream | null
-}
-
-/**
- * Options for the child process that runs the compiler, passed through to
- * `child_process.spawn`. The environment is merged with `process.env`, so a
- * caller only lists the variables it wants to add or change.
- *
- * @example
- *
- * Capture the compiler output instead of printing it
- * ```TypeScript
- *   compile('src/Main.elm', { processOpts: { stdio: 'pipe' } })
- * ```
- */
-export interface CompilerProcessOptions extends SpawnOptions {
-  cwd?: string
-  env?: NodeJS.ProcessEnv
-}
-
-interface CompilerSyncProcessOptions extends CompilerProcessOptions {
-  encoding?: BufferEncoding
-}
-
-type CompilerSpawn = (command: string, args: string[], options: CompilerProcessOptions) => CompilerProcessLike
-
-type CompilerSpawnSync = (command: string, args: string[], options: CompilerSyncProcessOptions) => SyncCompilerResult
-
-/**
- * Describes one compiler run. The flag options (`debug`, `docs`, `help`,
- * `optimize`, `output`, `report`, `runtimeOptions`) become `elm make` flags. The
- * rest decide how the process starts: which binary, which directory, which
- * environment.
- *
- * An option that this list does not name raises an error, so a misspelled flag
- * fails at once instead of being ignored. `yes`, `warn` and `pathToMake` were
- * removed in Elm 0.19, and their errors say what to use instead.
- *
- * @example
- *
- * Build an optimized bundle with a compiler installed in the project
- * ```TypeScript
- *   const options: CompilerOptions = {
- *     optimize: true,
- *     output: 'dist/main.js',
- *     pathToElm: 'node_modules/.bin/elm',
- *   }
- * ```
- */
-export interface CompilerOptions {
-  [key: string]: unknown
-  cwd?: string
-  debug?: boolean
-  docs?: string
-  help?: boolean
-  optimize?: boolean
-  output?: string
-  pathToElm?: string
-  processOpts?: CompilerProcessOptions
-  report?: string
-  runtimeOptions?: ReadonlyArray<string>
-  spawn?: CompilerSpawn | CompilerSpawnSync
-  verbose?: boolean
-}
-
-const defaultOptions: CompilerOptions = {
-  cwd: undefined,
-  debug: undefined,
-  docs: undefined,
-  help: undefined,
-  optimize: undefined,
-  output: undefined,
-  pathToElm: undefined,
-  processOpts: undefined,
-  report: undefined,
-  spawn,
-  verbose: false,
-}
-
-const supportedOptions = Object.keys(defaultOptions)
+export type { CompilerOptions, CompilerProcessOptions } from './process.ts'
 
 /**
  * Starts `elm make` on the given files and returns the running process. Use it
@@ -159,6 +54,9 @@ const supportedOptions = Object.keys(defaultOptions)
  * When the binary cannot start, for example because it is not installed, the
  * process emits `'error'` with a message that names the binary, and then closes
  * with a non-zero code. The current process does not crash.
+ *
+ * @deprecated Use `compile` of `@elm-toolkit/node-elm-compiler/result-api`, which
+ * returns a `Result` instead of throwing.
  *
  * @example
  *
@@ -174,28 +72,16 @@ const supportedOptions = Object.keys(defaultOptions)
  * @throws a message that names the binary, when the compiler cannot start, and
  * an `Error` for an option that this module does not know
  */
-export function compile(sources: Sources, options: CompilerOptions): ChildProcess {
-  const optionsWithDefaults = prepareOptions(options, options.spawn || spawn)
-  const pathToElm = options.pathToElm || elmBinaryName
-
-  try {
-    const compilerProcess = runCompiler(sources, optionsWithDefaults, pathToElm) as CompilerProcessLike
-
-    // A binary that cannot start is reported after this function returns, so throwing here would
-    // crash the caller. The process still closes with a non-zero code, which reports the failure.
-    return compilerProcess.on('error', (err: unknown) => {
-      if (err instanceof Error) {
-        err.message = compilerErrorToString(err, pathToElm)
-      }
-    }) as ChildProcess
-  } catch (err: unknown) {
-    throw startErrorOrOwnError(err, pathToElm)
-  }
+export function compile(sources: unknown, options: CompilerOptions): ChildProcess {
+  return orThrow(resultApi.compile(legacySources(sources), options))
 }
 
 /**
  * Runs `elm make` and waits for it to exit. Use it in scripts that cannot
  * continue before the build is done, and where blocking the process is fine.
+ *
+ * @deprecated Use `compileSync` of `@elm-toolkit/node-elm-compiler/result-api`,
+ * which returns a `Result` with the messages of the compiler.
  *
  * @example
  *
@@ -211,14 +97,20 @@ export function compile(sources: Sources, options: CompilerOptions): ChildProces
  * @throws a message that names the binary, when the compiler cannot start, and
  * an `Error` for an option that this module does not know
  */
-export function compileSync(sources: Sources, options: CompilerOptions): SyncCompilerResult {
-  const optionsWithDefaults = prepareOptions(options, options.spawn || spawnSyncAsCompilerSpawn)
+export function compileSync(sources: unknown, options: CompilerOptions): SyncCompilerResult {
+  const prepared = prepareOptions(options, options.spawn ?? spawnSyncAsCompilerSpawn)
   const pathToElm = options.pathToElm || elmBinaryName
+  const args = orThrow(processArgs(legacySources(sources), prepared))
 
+  if (prepared.verbose) {
+    console.log(['Running', pathToElm, ...args].join(' '))
+  }
+
+  // The new compileSync returns only the messages, so this one runs the process itself to keep the exit status.
   try {
-    return runCompiler(sources, optionsWithDefaults, pathToElm) as SyncCompilerResult
+    return (prepared.spawn as CompilerSpawnSync)(pathToElm, args, prepareProcessOpts(prepared))
   } catch (err: unknown) {
-    throw startErrorOrOwnError(err, pathToElm)
+    throw err instanceof Error && !('code' in err) ? err : startErrorMessage(err, pathToElm)
   }
 }
 
@@ -228,6 +120,9 @@ export function compileSync(sources: Sources, options: CompilerOptions): SyncCom
  *
  * The compiler messages are captured. They appear in the error when the build
  * fails, and on the console when `verbose` is set.
+ *
+ * @deprecated Use `compileToString` of `@elm-toolkit/node-elm-compiler/result-api`,
+ * which returns a `Result` instead of rejecting.
  *
  * @example
  *
@@ -241,38 +136,41 @@ export function compileSync(sources: Sources, options: CompilerOptions): SyncCom
  * @param options - the compiler options; `output` only selects the file extension
  * @returns the generated JavaScript
  */
-export async function compileToString(sources: Sources, options: CompilerOptions): Promise<string> {
-  const suffix = getSuffix(options.output, '.js')
-  const tempFilePath = makeTempOutputPathSync(suffix)
+export async function compileToString(sources: unknown, options: CompilerOptions): Promise<string> {
+  const remembered = rememberThrows((options.spawn ?? spawn) as CompilerSpawn)
+  const compiled = await resultApi.compileToString(legacySources(sources), { ...options, spawn: remembered.spawn })
 
-  try {
-    const compiler = compile(sources, {
-      ...options,
-      output: tempFilePath,
-      processOpts: { stdio: 'pipe' },
+  // The original let a throw of spawn pass, and reported a later start error or a stopped compiler as a failed build.
+  return orThrow(
+    compiled.mapError((error): CompileError => {
+      switch (error.kind) {
+        case 'compilerNotStarted':
+          return remembered.threw()
+            ? error
+            : { exitCode: null, kind: 'compileFailed', output: legacyStartMessage(error), sources: [] }
+        case 'compilerStopped':
+          return { exitCode: null, kind: 'compileFailed', output: '', sources: [] }
+        case 'unknownOption':
+        case 'compileFailed':
+        case 'tempFolderNotCreated':
+        case 'outputNotRead':
+        case 'moduleNotFound':
+        case 'workerNotStarted':
+        case 'noPorts':
+        case 'entryNotRead':
+        case 'invalidModule':
+          return error
+      }
     })
-
-    assertReadableStream(compiler.stdout)
-    assertReadableStream(compiler.stderr)
-
-    compiler.stdout.setEncoding('utf8')
-    compiler.stderr.setEncoding('utf8')
-
-    const output = await collectCompilerOutput(compiler)
-
-    if (options.verbose) {
-      console.log(output)
-    }
-
-    return await readFile(tempFilePath, { encoding: 'utf8' })
-  } finally {
-    await cleanupTempFile(tempFilePath)
-  }
+  )
 }
 
 /**
  * Compiles Elm files, waits for the compiler, and returns the generated
  * JavaScript as text. The compiler messages go to the terminal.
+ *
+ * @deprecated Use `compileToStringSync` of `@elm-toolkit/node-elm-compiler/result-api`,
+ * which returns a `Result` instead of throwing.
  *
  * @example
  *
@@ -286,20 +184,31 @@ export async function compileToString(sources: Sources, options: CompilerOptions
  * @returns the generated JavaScript
  * @throws the string `'Compilation failed.'` when the compiler exits with an error
  */
-export function compileToStringSync(sources: Sources, options: CompilerOptions): string {
-  const suffix = getSuffix(options.output, '.js')
-  const tempFilePath = makeTempOutputPathSync(suffix)
+export function compileToStringSync(sources: unknown, options: CompilerOptions): string {
+  const remembered = rememberThrows((options.spawn ?? spawnSyncAsCompilerSpawn) as CompilerSpawnSync)
+  const compiled = resultApi.compileToStringSync(legacySources(sources), { ...options, spawn: remembered.spawn })
 
-  try {
-    const compileProcess = compileSync(sources, { ...options, output: tempFilePath })
-
-    if (compileProcess.status === 0) {
-      return readFileSync(tempFilePath, { encoding: 'utf8' })
-    }
-
-    throw 'Compilation failed.'
-  } finally {
-    cleanupTempFileSync(tempFilePath)
+  switch (compiled.tag) {
+    case 'Ok':
+      return compiled.value
+    case 'Err':
+      switch (compiled.error.kind) {
+        // The original let a throw of spawn pass, and reported a compiler that ran badly as a failed build.
+        case 'compilerNotStarted':
+          throw remembered.threw() ? legacyError(compiled.error) : 'Compilation failed.'
+        case 'compileFailed':
+        case 'compilerStopped':
+          throw 'Compilation failed.'
+        case 'unknownOption':
+        case 'tempFolderNotCreated':
+        case 'outputNotRead':
+        case 'moduleNotFound':
+        case 'workerNotStarted':
+        case 'noPorts':
+        case 'entryNotRead':
+        case 'invalidModule':
+          throw legacyError(compiled.error)
+      }
   }
 }
 
@@ -311,6 +220,9 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  * The compiler runs in `projectRootDir`, so `elm.json` is found there. The
  * working directory of the current process does not change, and the compiled
  * code is removed once the worker has started.
+ *
+ * @deprecated Use `compileWorker` of `@elm-toolkit/node-elm-compiler/result-api`,
+ * which returns a `Result` instead of rejecting.
  *
  * @example
  *
@@ -329,12 +241,32 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  * @throws an `Error` when the build fails, when `moduleName` is not in the
  * output, which lists the modules that are, or when the module has no ports
  */
-export const compileWorker = makeCompileWorker(compile)
+export async function compileWorker(
+  projectRootDir: string,
+  modulePath: string,
+  moduleName: string,
+  workerArgs: unknown
+): Promise<resultApi.WorkerWithPorts> {
+  const started = await resultApi.compileWorker(projectRootDir, modulePath, moduleName, workerArgs)
+
+  switch (started.tag) {
+    case 'Ok':
+      return started.value
+    case 'Err': {
+      const cause = workerMessage(started.error)
+
+      throw new Error(String(cause), { cause })
+    }
+  }
+}
 
 /**
  * Returns the arguments that `compile` would pass to the `elm` binary, without
  * starting it. It exists because `node-elm-compiler` exported it, and it helps
  * to check which flags a set of options produces.
+ *
+ * @deprecated Use `prepareProcessArgs` of `@elm-toolkit/node-elm-compiler/result-api`,
+ * which returns a `Result` instead of throwing.
  *
  * @example
  *
@@ -348,34 +280,51 @@ export const compileWorker = makeCompileWorker(compile)
  * @param options - the compiler options; options that are not flags add nothing
  * @returns the arguments, starting with `make`
  */
-export function _prepareProcessArgs(sources: Sources, options: CompilerOptions): string[] {
-  return prepareProcessArgs(sources, options)
+export function _prepareProcessArgs(sources: unknown, options: CompilerOptions): string[] {
+  return orThrow(resultApi.prepareProcessArgs(legacySources(sources), options))
 }
 
+// eslint-disable-next-line import-x/no-deprecated -- the old API keeps exporting the old function
 export { findAllDependencies }
 
-interface ElmModuleRuntime {
-  init(options?: unknown): Partial<WorkerWithPorts>
-}
+/**
+ * Wraps a spawn function so that the old API knows whether it threw. The new
+ * API returns a throw of spawn and a start error emitted later as the same
+ * error, while the original package reported them in different ways. The
+ * wrapper goes only into the options of one call.
+ *
+ * @param spawnFunction - the spawn function of the options, or the default one
+ * @returns `spawn`, which behaves as the given function, and `threw`, which
+ * says whether a call of it threw
+ */
+function rememberThrows<A extends unknown[], R>(
+  spawnFunction: (...args: A) => R
+): { spawn: (...args: A) => R; threw: () => boolean } {
+  let threw = false
 
-interface ElmRuntime {
-  Elm: Record<string, ElmModuleRuntime>
-}
+  const remembering = (...args: A): R => {
+    try {
+      return spawnFunction(...args)
+    } catch (err: unknown) {
+      threw = true
 
-interface WorkerWithPorts {
-  ports: Record<string, unknown>
+      throw err
+    }
+  }
+
+  return { spawn: remembering, threw: () => threw }
 }
 
 /**
- * Normalize the `sources` argument.
+ * Checks the sources at run time, as the original did for JavaScript callers.
  *
- * @param sources - Elm source file or files
- * @returns Sources as an array
- * @throws When sources is neither a string nor an array
+ * @param sources - what the caller passed
+ * @returns the list of files
+ * @throws a message when the sources are neither a string nor an array
  */
-function prepareSources(sources: Sources): string[] {
+function legacySources(sources: unknown): ReadonlyArray<string> {
   if (Array.isArray(sources)) {
-    return [...sources].map(String)
+    return sources.map(String)
   }
 
   if (typeof sources === 'string') {
@@ -386,458 +335,122 @@ function prepareSources(sources: Sources): string[] {
 }
 
 /**
- * Apply upstream default semantics without overwriting already defined keys.
+ * Takes the value out of a result, or throws its error in the form of the
+ * original package.
  *
- * @param options - caller options
- * @param spawnFn - spawn function to pin into the final option bag
- * @returns Prepared options object
+ * @param result - the outcome of a function of the new API
+ * @returns the value
+ * @throws the error, as the original threw it
  */
-function prepareOptions(options: CompilerOptions, spawnFn: CompilerSpawn | CompilerSpawnSync): CompilerOptions {
-  const destination: CompilerOptions = { spawn: spawnFn }
-
-  return applyDefaults(destination, options, defaultOptions)
-}
-
-/**
- * Build the final `elm make` process arguments.
- *
- * @param sources - Elm source file or files
- * @param options - compiler options
- * @returns The final CLI argument list
- */
-function prepareProcessArgs(sources: Sources, options: CompilerOptions): string[] {
-  const preparedSources = prepareSources(sources)
-  const compilerArgs = compilerArgsFromOptions(options)
-
-  return ['make', ...preparedSources, ...compilerArgs]
-}
-
-/**
- * Build the process options passed to spawn/spawnSync.
- *
- * @param options - compiler options
- * @returns Prepared process options
- */
-function prepareProcessOpts(options: CompilerOptions): CompilerProcessOptions {
-  const env = {
-    LANG: 'en_US.UTF-8',
-    ...process.env,
-    ...options.processOpts?.env,
-  }
-
-  return {
-    cwd: options.cwd,
-    stdio: 'inherit',
-    ...options.processOpts,
-    env,
+function orThrow<A>(result: Result<CompileError, A>): A {
+  switch (result.tag) {
+    case 'Ok':
+      return result.value
+    case 'Err':
+      throw legacyError(result.error)
   }
 }
 
 /**
- * Execute the configured compiler process.
+ * Turns a compile error into what the original package threw: an `Error` for
+ * a problem of the options or of the build, and a string for a compiler that
+ * could not start.
  *
- * @param sources - Elm source file or files
- * @param options - compiler options with defaults applied
- * @param pathToElm - executable to invoke
- * @returns The underlying process result
- * @throws When options.spawn is not a function
- */
-function runCompiler(
-  sources: Sources,
-  options: CompilerOptions,
-  pathToElm: string
-): CompilerProcessLike | SyncCompilerResult {
-  if (typeof options.spawn !== 'function') {
-    throw `options.spawn was a(n) ${typeof options.spawn} instead of a function.`
-  }
-
-  const processArgs = prepareProcessArgs(sources, options)
-  const processOpts = prepareProcessOpts(options)
-
-  if (options.verbose) {
-    console.log(['Running', pathToElm, ...processArgs].join(' '))
-  }
-
-  return options.spawn(pathToElm, processArgs, processOpts)
-}
-
-/**
- * Convert compiler startup errors into the legacy string format.
- *
- * @param err - startup error
- * @param pathToElm - executable that was being launched
- * @returns Legacy stringified error message
- */
-function compilerErrorToString(err: unknown, pathToElm: string): string {
-  if (typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string') {
-    switch (err.code) {
-      case 'ENOENT':
-        return `Could not find Elm compiler "${pathToElm}". Is it installed?`
-      case 'EACCES':
-        return `Elm compiler "${pathToElm}" did not have permission to run. Do you need to give it executable permissions?`
-
-      default:
-        return `Error attempting to run Elm compiler "${pathToElm}":\n${String(err)}`
-    }
-  }
-
-  if (typeof err === 'object' && err !== null && 'message' in err && typeof err.message === 'string') {
-    return JSON.stringify(err.message)
-  }
-
-  return `Exception thrown when attempting to run Elm compiler ${JSON.stringify(pathToElm)}`
-}
-
-/**
- * Choose what to throw when the compiler could not be started. An `Error` that
- * this module raised itself, such as one for an unknown option, is thrown as it
- * is; a failure of the process start becomes the legacy message string.
- *
- * @param err - what was thrown while starting the compiler
- * @param pathToElm - executable that was being launched
+ * @param error - the compile error
  * @returns the value to throw
  */
-function startErrorOrOwnError(err: unknown, pathToElm: string): unknown {
-  if (err instanceof Error && !('code' in err)) {
-    return err
+function legacyError(error: CompileError): unknown {
+  switch (error.kind) {
+    case 'unknownOption':
+      return new Error(legacyOptionMessage(error.option))
+    case 'compilerNotStarted':
+      // The original let an Error without a system code pass unchanged, for example one of a custom spawn.
+      return error.original instanceof Error && !('code' in error.original) ? error.original : legacyStartMessage(error)
+    case 'compileFailed':
+      return new Error(`Compilation failed\n${error.output}`)
+    case 'compilerStopped':
+      return new Error(error.cause)
+    case 'tempFolderNotCreated':
+    case 'outputNotRead':
+      return error.original
+    case 'moduleNotFound':
+    case 'workerNotStarted':
+    case 'noPorts':
+      return workerMessage(error)
+    case 'entryNotRead':
+    case 'invalidModule':
+      return new Error(CliError.toString(CompileError.toCliError(error)))
   }
-
-  return compilerErrorToString(err, pathToElm)
 }
 
 /**
- * Compute the temp file suffix to use for string output compilation.
+ * The message of the original package for an option that it does not know.
  *
- * @param outputPath - optional requested output path
- * @param defaultSuffix - fallback extension
- * @returns The chosen file suffix
+ * @param option - the name of the option
+ * @returns the message
  */
-function getSuffix(outputPath: string | undefined, defaultSuffix: string): string {
-  if (outputPath) {
-    return path.extname(outputPath) || defaultSuffix
-  }
+function legacyOptionMessage(option: string): string {
+  switch (option) {
+    case 'yes':
+    case 'warn':
+      return `node-elm-compiler received the \`${option}\` option, but that was removed in Elm 0.19. Try re-running without passing the \`${option}\` option.`
+    case 'pathToMake':
+      return 'node-elm-compiler received the `pathToMake` option, but that was renamed to `pathToElm` in Elm 0.19. Try re-running after renaming the parameter to `pathToElm`.'
 
-  return defaultSuffix
+    default:
+      return `node-elm-compiler was given an unrecognized Elm compiler option: ${option}`
+  }
 }
 
 /**
- * Convert an options bag into elm CLI flags.
+ * The message of the original package for a compiler that could not start,
+ * made from the original exception, as the original package made it.
  *
- * @param options - compiler options
- * @returns Elm CLI flags
+ * @param error - the compile error
+ * @returns the message
  */
-function compilerArgsFromOptions(options: CompilerOptions): string[] {
-  return Object.entries(options).flatMap(([opt, value]): string[] => {
-    if (!value) {
-      return []
+function legacyStartMessage(error: Extract<CompileError, { kind: 'compilerNotStarted' }>): string {
+  // `compile` already gave an emitted error the message of the original package.
+  return error.original instanceof Error && systemMessages.has(error.original)
+    ? error.original.message
+    : startErrorMessage(error.original, error.pathToElm)
+}
+
+/**
+ * The message of the original package for a worker that did not start. A
+ * failed build now also carries the messages of Elm, which the original
+ * printed to the terminal instead.
+ *
+ * @param error - the compile error
+ * @returns the message
+ */
+function workerMessage(error: CompileError): unknown {
+  switch (error.kind) {
+    case 'compileFailed':
+      return `Errored with exit code ${String(error.exitCode)}\n${error.output}`
+    case 'moduleNotFound': {
+      const hint =
+        error.suggestions.length > 1
+          ? `\nMaybe you meant one of these: ${error.suggestions.join(',')}`
+          : error.suggestions.length === 1
+            ? `\nMaybe you meant: ${error.suggestions.join('')}`
+            : ''
+
+      return `I couldn't find the entry module ${error.moduleName}.\n${hint}\nYou can pass me a different module to use with --module=<moduleName>`
     }
-
-    switch (opt) {
-      case 'debug':
-        return ['--debug']
-      case 'docs':
-        return ['--docs', String(value)]
-      case 'help':
-        return ['--help']
-      case 'optimize':
-        return ['--optimize']
-      case 'output':
-        return ['--output', String(value)]
-      case 'report':
-        return ['--report', String(value)]
-      case 'runtimeOptions':
-        return ['+RTS', ...(value as ReadonlyArray<string>), '-RTS']
-
-      default:
-        if (supportedOptions.includes(opt)) {
-          return []
-        }
-
-        if (opt === 'yes') {
-          throw new Error(
-            'node-elm-compiler received the `yes` option, but that was removed in Elm 0.19. Try re-running without passing the `yes` option.'
-          )
-        }
-
-        if (opt === 'warn') {
-          throw new Error(
-            'node-elm-compiler received the `warn` option, but that was removed in Elm 0.19. Try re-running without passing the `warn` option.'
-          )
-        }
-
-        if (opt === 'pathToMake') {
-          throw new Error(
-            'node-elm-compiler received the `pathToMake` option, but that was renamed to `pathToElm` in Elm 0.19. Try re-running after renaming the parameter to `pathToElm`.'
-          )
-        }
-
-        throw new Error(`node-elm-compiler was given an unrecognized Elm compiler option: ${opt}`)
-    }
-  })
-}
-
-/**
- * Create the exported compileWorker function.
- *
- * @param compileFn - compile implementation to use
- * @returns Worker compiler function
- */
-function makeCompileWorker(
-  compileFn: (sources: Sources, options: CompilerOptions) => ChildProcess
-): (projectRootDir: string, modulePath: string, moduleName: string, workerArgs: unknown) => Promise<WorkerWithPorts> {
-  return async function compiledWorker(
-    projectRootDir: string,
-    modulePath: string,
-    moduleName: string,
-    workerArgs: unknown
-  ): Promise<WorkerWithPorts> {
-    const tmpDirPath = await createTmpDir()
-
-    // The compiler gets the project as its own working directory, so the process never changes
-    // directory, and two workers can compile at the same time.
-    try {
-      const destination = path.join(tmpDirPath, jsEmitterFilename)
-
-      await compileEmitter(compileFn, modulePath, { cwd: projectRootDir, output: destination })
-
-      return await runWorker(destination, moduleName, workerArgs)
-    } catch (err: unknown) {
-      const wrappedError = new Error(String(err))
-      ;(wrappedError as Error & { cause?: unknown }).cause = err
-
-      throw wrappedError
-    } finally {
-      await rm(tmpDirPath, { force: true, recursive: true })
-    }
+    case 'noPorts':
+      // The missing space before `port` is in the original message.
+      return `The module ${error.moduleName} doesn't expose any ports!\n\n\nTry adding something likeport foo : Value\nport foo =\n    someValue\n\nto ${error.moduleName}!`
+    case 'workerNotStarted':
+      // The original wrapped the exception of init, whose text starts with its name.
+      return `Error: ${error.cause}`
+    case 'unknownOption':
+    case 'compilerNotStarted':
+    case 'compilerStopped':
+    case 'tempFolderNotCreated':
+    case 'outputNotRead':
+    case 'entryNotRead':
+    case 'invalidModule':
+      return legacyError(error)
   }
-}
-
-/**
- * Create a temporary directory for worker compilation.
- *
- * @returns The temporary directory path
- */
-async function createTmpDir(): Promise<string> {
-  return await mkdtemp(path.join(tmpdir(), 'node-elm-compiler-'))
-}
-
-/**
- * Suggest probable entry module names.
- *
- * @param elm - compiled Elm namespace object
- * @returns Suggested module names
- */
-function suggestModulesNames(elm: Record<string, unknown>): string[] {
-  return Object.keys(elm).filter((key): boolean => !knownModules.includes(key as (typeof knownModules)[number]))
-}
-
-/**
- * Build the legacy missing-entry-module message.
- *
- * @param moduleName - requested module
- * @param elm - compiled Elm namespace object
- * @returns Error message
- */
-function missingEntryModuleMessage(moduleName: string, elm: Record<string, unknown>): string {
-  let errorMessage = `I couldn't find the entry module ${moduleName}.\n`
-  const suggestions = suggestModulesNames(elm)
-
-  if (suggestions.length > 1) {
-    errorMessage += `\nMaybe you meant one of these: ${suggestions.join(',')}`
-  } else if (suggestions.length === 1) {
-    errorMessage += `\nMaybe you meant: ${suggestions}`
-  }
-
-  errorMessage += '\nYou can pass me a different module to use with --module=<moduleName>'
-
-  return errorMessage
-}
-
-/**
- * Build the legacy no-ports message.
- *
- * @param moduleName - requested module
- * @returns Error message
- */
-function noPortsMessage(moduleName: string): string {
-  let errorMessage = `The module ${moduleName} doesn't expose any ports!\n`
-  errorMessage += '\n\nTry adding something like'
-  errorMessage += `port foo : Value\nport foo =\n    someValue\n\nto ${moduleName}!`
-
-  return errorMessage.trim()
-}
-
-/**
- * Load the compiled worker module and initialize it.
- *
- * @param jsFilename - generated JS file path
- * @param moduleName - Elm module name to initialize
- * @param workerArgs - arguments forwarded to `init`
- * @returns Initialized worker with ports
- */
-async function runWorker(jsFilename: string, moduleName: string, workerArgs: unknown): Promise<WorkerWithPorts> {
-  const runtime = require(jsFilename) as ElmRuntime
-  const elm = runtime.Elm
-
-  if (!(moduleName in elm)) {
-    throw missingEntryModuleMessage(moduleName, elm)
-  }
-
-  const worker = elm[moduleName].init(workerArgs)
-
-  // Elm leaves `ports` out entirely when a module declares none.
-  if (!worker.ports || Object.keys(worker.ports).length === 0) {
-    throw noPortsMessage(moduleName)
-  }
-
-  return { ...worker, ports: worker.ports }
-}
-
-/**
- * Compile the emitter JS used by compileWorker.
- *
- * @param compileFn - compile implementation to use
- * @param src - Elm source file
- * @param options - compiler options
- * @returns Close exit code on success
- */
-function compileEmitter(
-  compileFn: (sources: Sources, options: CompilerOptions) => ChildProcess,
-  src: string,
-  options: CompilerOptions
-): Promise<number> {
-  return new Promise<number>((resolve, reject) => {
-    compileFn(src, options).on('close', (exitCode: unknown) => {
-      if (exitCode === 0) {
-        resolve(0)
-
-        return
-      }
-
-      reject(`Errored with exit code ${String(exitCode)}`)
-    })
-  })
-}
-
-/**
- * Collect compiler stdout/stderr and reject on non-zero exit.
- *
- * @param compiler - spawned compiler process
- * @returns Collected text output
- */
-function collectCompilerOutput(compiler: ChildProcess): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    let output = ''
-
-    compiler.stdout?.on('data', (chunk: string | Buffer) => {
-      output += chunk.toString()
-    })
-
-    compiler.stderr?.on('data', (chunk: string | Buffer) => {
-      output += chunk.toString()
-    })
-
-    // A compiler that never started prints nothing, so its start error is the only explanation.
-    compiler.on('error', (err: unknown) => {
-      output += err instanceof Error ? err.message : String(err)
-    })
-
-    compiler.on('close', (exitCode: unknown) => {
-      if (exitCode !== 0) {
-        reject(new Error(`Compilation failed\n${output}`))
-
-        return
-      }
-
-      resolve(output)
-    })
-  })
-}
-
-/**
- * Ensure a compiler stream exists before using it.
- *
- * @param stream - compiler stdio stream
- * @throws When the compiler stdio stream is unavailable
- */
-function assertReadableStream(
-  stream: NodeJS.ReadableStream | null | undefined
-): asserts stream is NodeJS.ReadableStream & {
-  setEncoding(encoding: BufferEncoding): NodeJS.ReadableStream
-} {
-  if (!stream || typeof stream.setEncoding !== 'function') {
-    throw new Error('Compilation output streams are not available.')
-  }
-}
-
-/**
- * Create a unique temp output path synchronously.
- *
- * @param suffix - file suffix to use
- * @returns The temp file path
- */
-function makeTempOutputPathSync(suffix: string): string {
-  const directory = mkdtempSync(path.join(tmpdir(), 'node-elm-compiler-'))
-
-  return path.join(directory, `elm-output${suffix}`)
-}
-
-/**
- * Remove a temp file and its parent directory asynchronously.
- *
- * @param filePath - file path to clean up
- */
-async function cleanupTempFile(filePath: string): Promise<void> {
-  await rm(path.dirname(filePath), { force: true, recursive: true })
-}
-
-/**
- * Remove a temp file and its parent directory before returning.
- *
- * @param filePath - file path to clean up
- */
-function cleanupTempFileSync(filePath: string): void {
-  rmSync(path.dirname(filePath), { force: true, recursive: true })
-}
-
-/**
- * Provide a sync-spawn adapter that matches the configurable `spawn` option shape.
- *
- * @param command - executable to launch
- * @param args - CLI arguments
- * @param options - process options
- * @returns Synchronous spawn result
- */
-function spawnSyncAsCompilerSpawn(
-  command: string,
-  args: string[],
-  options: CompilerSyncProcessOptions
-): SyncCompilerResult {
-  return spawnSync(command, args, options)
-}
-
-/**
- * Apply lodash-like defaults semantics.
- *
- * @param destination - object to enrich
- * @param sources - sources to read defaults from
- * @returns The destination object
- */
-function applyDefaults<T extends Record<string, unknown>>(
-  destination: T,
-  ...sources: ReadonlyArray<Partial<T> | undefined>
-): T {
-  for (const source of sources) {
-    if (!source) {
-      continue
-    }
-
-    for (const key of Object.keys(source) as Array<keyof T>) {
-      if (destination[key] === undefined) {
-        destination[key] = source[key] as T[keyof T]
-      }
-    }
-  }
-
-  return destination
 }

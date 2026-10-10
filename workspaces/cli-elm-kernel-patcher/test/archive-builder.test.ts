@@ -94,7 +94,7 @@ function writeManifest(patches: unknown): void {
  * the outcome is a success.
  *
  * @param outcome - the outcome of an archive step
- * @returns the summary and the details of the error, one per line
+ * @returns the summary and what happened, one per line
  */
 function errorOf(outcome: Result<CliError, unknown>): string {
   switch (outcome.tag) {

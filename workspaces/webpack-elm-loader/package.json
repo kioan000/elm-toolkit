@@ -31,6 +31,7 @@
     "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
+    "@elm-toolkit/cli-lib": "workspace:^",
     "@elm-toolkit/node-elm-compiler": "workspace:^"
   },
   "peerDependencies": {

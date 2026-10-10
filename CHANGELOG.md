@@ -137,9 +137,12 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 - `@elm-toolkit/cli-lib`: `Maybe` and `Result`, with the functions of the
   modules of the same names in `elm/core` as methods, so that the steps read
   from top to bottom: `Result.fromAttempt(read).map(parse).mapError(describe)`.
-  `Result.fromAttempt` turns an exception into an `Err`. `CliError` and
+  `Result.fromAttempt` turns an exception into an `Err`, and
+  `Result.fromPromise` turns a rejected promise into one. `CliError` and
   `CliSuccess` describe the outcome of a command for a person, and their
-  `print` functions show it the way every command of the toolkit does.
+  `print` functions show it the way every command of the toolkit does. A
+  `CliError` can also carry the report of another program, such as a
+  compiler, which is shown under "Details:" as that program wrote it.
 - `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
   home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a
@@ -161,6 +164,13 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   manifest of Git commits and the archive built from it in one folder,
   `elm-kernel-patcher/`, which `patches` accepts. A JSON schema of the manifest
   lets editors complete and check it.
+- `@elm-toolkit/node-elm-compiler`: the `./result-api` subpath. It has the
+  functions of the root, with the same names and options, but each one returns
+  a `Result` with a `CompileError` instead of throwing.
+  `CompileError.toCliError` turns that error into a message for a person. An
+  error that comes from an exception keeps it in `original`.
+- `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
+  that a program compiles, and writes no output.
 
 ### Changed
 
@@ -168,13 +178,50 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   highlighted line that says what happened, then the sections "What happened:",
   "How to fix:" and "Next step:", each after a blank line. A suggested command
   keeps the options that were used. The settings of a patch run print as
-  lines, and an error prints a stack trace only when it looks like a bug.
+  lines, and an error prints a stack trace only when it looks like a bug. A long
+  line continues on the next line, within the width of the terminal, and a
+  command between backticks stays on one line.
 - `@elm-toolkit/cli-elm-kernel-patcher`: an archive is extracted into a
   temporary folder, not inside the installed package, so the patcher works when
   `node_modules` is read only.
 - `@elm-toolkit/cli-elm-kernel-patcher`: each package in the bundled patches
   carries the `LICENSE` of its fork. The archive is now built from
   `lib/elm-kernel-patcher.json`, which names the commit of each package.
+- `@elm-toolkit/node-elm-compiler`: the package now depends on
+  `@elm-toolkit/cli-lib`.
+- `@elm-toolkit/node-elm-compiler`: `compileWorker` no longer prints the
+  messages of a failed build to the terminal. The error holds them instead.
+- `@elm-toolkit/node-elm-compiler`: `compileToString` keeps the `processOpts`
+  of the caller, such as `env`. Before, it replaced them.
+- `@elm-toolkit/node-elm-compiler`: some messages of the deprecated API say
+  more than before. Code that compares the text of an error must change:
+  - `compile` and `compileToString` with sources that are neither a string nor
+    a list throw a message that says so, instead of a message about the
+    compiler.
+  - A failed build of `compileToString` has only the problems that Elm
+    reports, without the progress lines, also in the `verbose` log.
+  - `compileWorker` names the compiler when it is not installed, instead of
+    `Errored with exit code -2`.
+  - `findAllDependencies` logs a file that it cannot read with a message that
+    says what happened and how to fix it, instead of the raw error.
+- `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
+  new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
+  imports of a file, webpack shows a warning in the layout of the toolkit,
+  instead of a line on the console.
+
+### Deprecated
+
+- `@elm-toolkit/node-elm-compiler`: the functions at the root of the package.
+  They keep working as before, and a later release will remove them.
+
+  **How to fix:** import the same function from `./result-api`, and read the
+  `Result` instead of catching an exception. The README of the package lists
+  the functions whose result changed shape.
+
+  ```diff
+  -import { compileToString } from '@elm-toolkit/node-elm-compiler'
+  +import { compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
+  ```
 
 ## [0.1.0-alpha.2] - 2026-10-02
 
