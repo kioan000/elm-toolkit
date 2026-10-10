@@ -96,7 +96,7 @@ export default tseslint.config(
         },
       ],
       'no-duplicate-imports': 'error',
-      // A switch on the tag of a Maybe or a Result must handle every case, as a case expression in Elm.
+      // A switch on the `type_` of a union, such as a Maybe or a Result, must handle every case, as a case expression in Elm.
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       'import-x/no-duplicates': 'off',
 

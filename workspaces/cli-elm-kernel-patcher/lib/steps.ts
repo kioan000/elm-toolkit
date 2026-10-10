@@ -31,7 +31,7 @@ export function report<A>(
   outcome: Result<CliError, A>,
   success: (value: A) => CliSuccess
 ): Result<CliError, A> {
-  switch (outcome.tag) {
+  switch (outcome.type_) {
     case 'Ok':
       CliSuccess.print(title, success(outcome.value))
 

@@ -89,7 +89,7 @@ describe('the schema of the manifest', () => {
       assert.equal(validate(written), false, 'the schema should refuse it')
       const outcome = buildArchive({ elmJsonFolder: work })
 
-      switch (outcome.tag) {
+      switch (outcome.type_) {
         case 'Ok':
           return assert.fail('the archive builder should refuse it')
         case 'Err':

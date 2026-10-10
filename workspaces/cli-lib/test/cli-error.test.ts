@@ -26,7 +26,7 @@ describe('Result.attempt', () => {
       throw thrown
     })
 
-    switch (caught.tag) {
+    switch (caught.type_) {
       case 'Ok':
         return assert.fail('the call should fail')
       case 'Err':
@@ -61,7 +61,7 @@ describe('CliError', () => {
   it('takes what happened from the standard error of a failed child process, without a trace', () => {
     const caught = Result.fromAttempt(() => execFileSync('git', ['no-such-command'], { stdio: 'pipe' }))
 
-    switch (caught.tag) {
+    switch (caught.type_) {
       case 'Ok':
         return assert.fail('git should refuse the command')
       case 'Err': {
@@ -79,7 +79,7 @@ describe('CliError', () => {
 
     assert.deepEqual(error.whatHappened, ['list is not iterable'])
 
-    switch (error.trace.tag) {
+    switch (error.trace.type_) {
       case 'Just':
         return assert.match(error.trace.value, /^at /)
       case 'Nothing':
@@ -90,7 +90,7 @@ describe('CliError', () => {
   it('treats JSON that does not parse as a problem of the input, without a trace', () => {
     const caught = Result.fromAttempt(() => JSON.parse('{ "patches": [ ') as unknown)
 
-    switch (caught.tag) {
+    switch (caught.type_) {
       case 'Ok':
         return assert.fail('the JSON should not parse')
       case 'Err':

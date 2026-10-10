@@ -34,7 +34,7 @@ import { CompileError, compileToString } from '@elm-toolkit/node-elm-compiler/re
 
 const compileToStringResult = await compileToString('src/Main.elm', { debug: true })
 
-switch (compileToStringResult.tag) {
+switch (compileToStringResult.type_) {
   case 'Ok':
     console.log(`${compileToStringResult.value.length} characters of JavaScript`)
     break
@@ -44,7 +44,7 @@ switch (compileToStringResult.tag) {
 ```
 
 `CompileError.toCliError` turns an error into a message for a person, with the
-next step when there is one. A caller can also read `error.kind` and react to
+next step when there is one. A caller can also read `error.type_` and react to
 one case, for example show the messages of a failed build in the browser. An
 error that comes from an exception keeps the exception in `original`, with its
 stack and its system code.
@@ -66,7 +66,7 @@ commit hook or a CI step.
 import { dryCompile } from '@elm-toolkit/node-elm-compiler/result-api'
 
 const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
-// Ok, or Err with kind 'compileFailed' and the messages of Elm
+// Ok, or Err with type_ 'CompileFailed' and the messages of Elm
 ```
 
 ## Finding what a module imports
@@ -107,7 +107,7 @@ where the old code caught an exception.
 -}
 +const compileToStringResult = await compileToString('src/Main.elm', options)
 +
-+switch (compileToStringResult.tag) {
++switch (compileToStringResult.type_) {
 +  case 'Ok':
 +    await writeFile('public/main.js', compileToStringResult.value)
 +    break

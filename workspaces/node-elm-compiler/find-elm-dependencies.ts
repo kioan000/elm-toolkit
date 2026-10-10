@@ -168,8 +168,8 @@ async function baseDirOf(file: string): Promise<Result<CompileError, string>> {
     return {
       cause: caught instanceof Error ? caught.message : String(caught),
       file,
-      kind: 'entryNotRead',
       original: caught,
+      type_: 'EntryNotRead',
     }
   })
 
@@ -184,7 +184,7 @@ async function baseDirOf(file: string): Promise<Result<CompileError, string>> {
     }
 
     return line.match(/^(?:port\s+)?module\s/)
-      ? Result.Err({ file, kind: 'invalidModule' })
+      ? Result.Err({ file, type_: 'InvalidModule' })
       : Result.Ok(path.dirname(file))
   })
 }
@@ -486,7 +486,7 @@ export async function findDependencies(
 
   const baseDir = await baseDirOf(file)
 
-  switch (baseDir.tag) {
+  switch (baseDir.type_) {
     case 'Ok':
       return Result.Ok(await search(getCachedElmPackageSourceDirectories(baseDir.value)))
     case 'Err':
@@ -526,7 +526,7 @@ export async function findAllDependencies(
 ): Promise<ReadonlyArray<string>> {
   const found = await findDependencies(file, knownDependencies, sourceDirectories, knownFiles)
 
-  switch (found.tag) {
+  switch (found.type_) {
     case 'Ok':
       return found.value
     case 'Err':

@@ -212,8 +212,8 @@ function optionFlags(option: string, value: unknown): Result<CompileError, strin
             hint:
               removedOptions[option] ??
               `Remove "${option}", or correct its spelling. The known options are: ${supportedOptions.join(', ')}.`,
-            kind: 'unknownOption',
             option,
+            type_: 'UnknownOption',
           })
   }
 }
@@ -289,9 +289,9 @@ export function startError(err: unknown, pathToElm: string): CompileError {
   return {
     cause: err instanceof Error ? (systemMessages.get(err) ?? err.message) : String(err),
     code: code === '' ? Maybe.Nothing : Maybe.Just(code),
-    kind: 'compilerNotStarted',
     original: err,
     pathToElm,
+    type_: 'CompilerNotStarted',
   }
 }
 

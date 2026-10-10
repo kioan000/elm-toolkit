@@ -2,7 +2,7 @@
  * The ways a call of the Elm compiler can fail, as data that a caller can
  * inspect, and their conversion into a message for a person.
  *
- * Each case of `CompileError` has a `kind` and the facts that explain it: the
+ * Each case of `CompileError` has a `type_` and the facts that explain it: the
  * option that was not known, the compiler that did not start, the messages of a
  * failed build. A tool can react to one case and report the others. To print an
  * error, turn it into a `CliError` of `@elm-toolkit/cli-lib` with `toCliError`,
@@ -14,7 +14,7 @@
 import { CliError, type Maybe } from '@elm-toolkit/cli-lib'
 
 /**
- * One failure of a call of the Elm compiler. Read it with a `switch` on `kind`,
+ * One failure of a call of the Elm compiler. Read it with a `switch` on `type_`,
  * which must handle every case.
  *
  * A case that comes from an exception keeps its message in `cause`, and the
@@ -26,8 +26,8 @@ import { CliError, type Maybe } from '@elm-toolkit/cli-lib'
  *
  * React to a build that failed, and report everything else
  * ```TypeScript
- *   switch (error.kind) {
- *     case 'compileFailed':
+ *   switch (error.type_) {
+ *     case 'CompileFailed':
  *       return showInTheBrowser(error.output)
  *     default:
  *       return CliError.print('elm make', CompileError.toCliError(error))
@@ -36,14 +36,14 @@ import { CliError, type Maybe } from '@elm-toolkit/cli-lib'
  */
 export type CompileError =
   /** An option that this package does not know; `hint` says what to do instead, for example for an option that Elm 0.19 removed. */
-  | { readonly hint: string; readonly kind: 'unknownOption'; readonly option: string }
+  | { readonly hint: string; readonly option: string; readonly type_: 'UnknownOption' }
   /** The compiler binary could not start; `code` is the code of the system, such as ENOENT. */
   | {
       readonly cause: string
       readonly code: Maybe<string>
-      readonly kind: 'compilerNotStarted'
       readonly original: unknown
       readonly pathToElm: string
+      readonly type_: 'CompilerNotStarted'
     }
   /**
    * The compiler started, and was stopped before it finished. `reason` is `timeout` after
@@ -53,48 +53,48 @@ export type CompileError =
    */
   | {
       readonly cause: string
-      readonly kind: 'compilerStopped'
       readonly original: unknown
       readonly pathToElm: string
       readonly reason: 'maxBuffer' | 'signal' | 'timeout'
+      readonly type_: 'CompilerStopped'
     }
   /** Elm ran on `sources` and reported problems; `output` holds the problems, as Elm wrote them. */
   | {
       readonly exitCode: number | null
-      readonly kind: 'compileFailed'
       readonly output: string
       readonly sources: ReadonlyArray<string>
+      readonly type_: 'CompileFailed'
     }
   /** The temporary folder for the output of Elm could not be created inside `folder`. */
   | {
       readonly cause: string
       readonly folder: string
-      readonly kind: 'tempFolderNotCreated'
       readonly original: unknown
+      readonly type_: 'TempFolderNotCreated'
     }
   /** The file that the compiler wrote could not be read. */
-  | { readonly cause: string; readonly file: string; readonly kind: 'outputNotRead'; readonly original: unknown }
+  | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'OutputNotRead' }
   /** The compiled Elm file has no module of that name; `suggestions` lists the ones it has. */
   | {
       readonly file: string
-      readonly kind: 'moduleNotFound'
       readonly moduleName: string
       readonly suggestions: ReadonlyArray<string>
+      readonly type_: 'ModuleNotFound'
     }
   /** The `init` of the module threw, most often because of flags of the wrong type. */
   | {
       readonly cause: string
       readonly file: string
-      readonly kind: 'workerNotStarted'
       readonly moduleName: string
       readonly original: unknown
+      readonly type_: 'WorkerNotStarted'
     }
   /** The module has no ports, so Node cannot talk to it. */
-  | { readonly file: string; readonly kind: 'noPorts'; readonly moduleName: string }
+  | { readonly file: string; readonly moduleName: string; readonly type_: 'NoPorts' }
   /** The Elm file to start from could not be read. */
-  | { readonly cause: string; readonly file: string; readonly kind: 'entryNotRead'; readonly original: unknown }
+  | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'EntryNotRead' }
   /** The first line of the Elm file is not a valid module declaration. */
-  | { readonly file: string; readonly kind: 'invalidModule' }
+  | { readonly file: string; readonly type_: 'InvalidModule' }
 
 /**
  * Turns a compile error into an error for a person. The first line names the
@@ -119,8 +119,8 @@ export type CompileError =
  * @returns the same error, described for a person
  */
 function toCliError(error: CompileError): CliError {
-  switch (error.kind) {
-    case 'unknownOption':
+  switch (error.type_) {
+    case 'UnknownOption':
       return CliError.create({
         solution: error.hint,
         summary: `Unknown option "${error.option}".`,
@@ -129,11 +129,11 @@ function toCliError(error: CompileError): CliError {
           'An unknown option stops the call, so that a misspelled flag cannot pass unnoticed.',
         ],
       })
-    case 'compilerNotStarted':
+    case 'CompilerNotStarted':
       return startError(error.pathToElm, error.code.withDefault(''), error.cause)
-    case 'compilerStopped':
+    case 'CompilerStopped':
       return stoppedError(error.pathToElm, error.reason, error.cause)
-    case 'compileFailed':
+    case 'CompileFailed':
       return CliError.create({
         details: error.output.trim() === '' ? [] : error.output.trim().split('\n'),
         solution:
@@ -141,7 +141,7 @@ function toCliError(error: CompileError): CliError {
         summary: `Could not compile ${error.sources.join(', ')}.`,
         whatHappened: ['The Elm compiler reported an error.'],
       })
-    case 'tempFolderNotCreated':
+    case 'TempFolderNotCreated':
       return CliError.create({
         solution: `Check that ${error.folder} exists, has free space and can be written. To use another folder, set the TMPDIR environment variable.`,
         summary: 'Could not create a temporary folder for the output of Elm.',
@@ -150,7 +150,7 @@ function toCliError(error: CompileError): CliError {
           `The system reported: ${error.cause}`,
         ],
       })
-    case 'outputNotRead':
+    case 'OutputNotRead':
       return CliError.create({
         solution:
           'This is probably a bug of node-elm-compiler. Please report it at https://github.com/kioan000/elm-toolkit/issues, with the message above.',
@@ -160,7 +160,7 @@ function toCliError(error: CompileError): CliError {
           `The system reported: ${error.cause}`,
         ],
       })
-    case 'moduleNotFound':
+    case 'ModuleNotFound':
       return CliError.create({
         solution: moduleNameFix(error.moduleName, error.suggestions, error.file),
         summary: `compileWorker: ${error.file} has no module called "${error.moduleName}".`,
@@ -171,7 +171,7 @@ function toCliError(error: CompileError): CliError {
             : `${error.file} has only these modules: ${error.suggestions.join(', ')}.`,
         ],
       })
-    case 'workerNotStarted':
+    case 'WorkerNotStarted':
       return CliError.create({
         solution: `Check the flags passed to compileWorker: they must match the type that the init function of ${error.moduleName} expects.`,
         summary: `compileWorker: the module "${error.moduleName}" failed to start.`,
@@ -180,7 +180,7 @@ function toCliError(error: CompileError): CliError {
           `Elm reported: ${error.cause}`,
         ],
       })
-    case 'noPorts':
+    case 'NoPorts':
       return CliError.create({
         solution: `Declare a port in ${error.file}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
         summary: 'compileWorker: attempt to compile a worker without ports.',
@@ -189,7 +189,7 @@ function toCliError(error: CompileError): CliError {
           'Node exchanges data with a worker only through ports, so a worker without ports cannot receive input or return a result.',
         ],
       })
-    case 'entryNotRead':
+    case 'EntryNotRead':
       return CliError.create({
         solution: error.cause.startsWith('ENOENT')
           ? `Check the path: no file exists at ${error.file}.`
@@ -200,7 +200,7 @@ function toCliError(error: CompileError): CliError {
           `The system reported: ${error.cause}`,
         ],
       })
-    case 'invalidModule':
+    case 'InvalidModule':
       return CliError.create({
         solution: `Correct the first line of ${error.file}. Run \`elm make ${error.file}\` to see what Elm expects.`,
         summary: `findAllDependencies: ${error.file} does not start with a module declaration.`,

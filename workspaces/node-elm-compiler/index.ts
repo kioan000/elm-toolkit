@@ -143,22 +143,22 @@ export async function compileToString(sources: unknown, options: CompilerOptions
   // The original let a throw of spawn pass, and reported a later start error or a stopped compiler as a failed build.
   return orThrow(
     compiled.mapError((error): CompileError => {
-      switch (error.kind) {
-        case 'compilerNotStarted':
+      switch (error.type_) {
+        case 'CompilerNotStarted':
           return remembered.threw()
             ? error
-            : { exitCode: null, kind: 'compileFailed', output: legacyStartMessage(error), sources: [] }
-        case 'compilerStopped':
-          return { exitCode: null, kind: 'compileFailed', output: '', sources: [] }
-        case 'unknownOption':
-        case 'compileFailed':
-        case 'tempFolderNotCreated':
-        case 'outputNotRead':
-        case 'moduleNotFound':
-        case 'workerNotStarted':
-        case 'noPorts':
-        case 'entryNotRead':
-        case 'invalidModule':
+            : { exitCode: null, output: legacyStartMessage(error), sources: [], type_: 'CompileFailed' }
+        case 'CompilerStopped':
+          return { exitCode: null, output: '', sources: [], type_: 'CompileFailed' }
+        case 'UnknownOption':
+        case 'CompileFailed':
+        case 'TempFolderNotCreated':
+        case 'OutputNotRead':
+        case 'ModuleNotFound':
+        case 'WorkerNotStarted':
+        case 'NoPorts':
+        case 'EntryNotRead':
+        case 'InvalidModule':
           return error
       }
     })
@@ -188,25 +188,25 @@ export function compileToStringSync(sources: unknown, options: CompilerOptions):
   const remembered = rememberThrows((options.spawn ?? spawnSyncAsCompilerSpawn) as CompilerSpawnSync)
   const compiled = resultApi.compileToStringSync(legacySources(sources), { ...options, spawn: remembered.spawn })
 
-  switch (compiled.tag) {
+  switch (compiled.type_) {
     case 'Ok':
       return compiled.value
     case 'Err':
-      switch (compiled.error.kind) {
+      switch (compiled.error.type_) {
         // The original let a throw of spawn pass, and reported a compiler that ran badly as a failed build.
-        case 'compilerNotStarted':
+        case 'CompilerNotStarted':
           throw remembered.threw() ? legacyError(compiled.error) : 'Compilation failed.'
-        case 'compileFailed':
-        case 'compilerStopped':
+        case 'CompileFailed':
+        case 'CompilerStopped':
           throw 'Compilation failed.'
-        case 'unknownOption':
-        case 'tempFolderNotCreated':
-        case 'outputNotRead':
-        case 'moduleNotFound':
-        case 'workerNotStarted':
-        case 'noPorts':
-        case 'entryNotRead':
-        case 'invalidModule':
+        case 'UnknownOption':
+        case 'TempFolderNotCreated':
+        case 'OutputNotRead':
+        case 'ModuleNotFound':
+        case 'WorkerNotStarted':
+        case 'NoPorts':
+        case 'EntryNotRead':
+        case 'InvalidModule':
           throw legacyError(compiled.error)
       }
   }
@@ -249,7 +249,7 @@ export async function compileWorker(
 ): Promise<resultApi.WorkerWithPorts> {
   const started = await resultApi.compileWorker(projectRootDir, modulePath, moduleName, workerArgs)
 
-  switch (started.tag) {
+  switch (started.type_) {
     case 'Ok':
       return started.value
     case 'Err': {
@@ -343,7 +343,7 @@ function legacySources(sources: unknown): ReadonlyArray<string> {
  * @throws the error, as the original threw it
  */
 function orThrow<A>(result: Result<CompileError, A>): A {
-  switch (result.tag) {
+  switch (result.type_) {
     case 'Ok':
       return result.value
     case 'Err':
@@ -360,25 +360,25 @@ function orThrow<A>(result: Result<CompileError, A>): A {
  * @returns the value to throw
  */
 function legacyError(error: CompileError): unknown {
-  switch (error.kind) {
-    case 'unknownOption':
+  switch (error.type_) {
+    case 'UnknownOption':
       return new Error(legacyOptionMessage(error.option))
-    case 'compilerNotStarted':
+    case 'CompilerNotStarted':
       // The original let an Error without a system code pass unchanged, for example one of a custom spawn.
       return error.original instanceof Error && !('code' in error.original) ? error.original : legacyStartMessage(error)
-    case 'compileFailed':
+    case 'CompileFailed':
       return new Error(`Compilation failed\n${error.output}`)
-    case 'compilerStopped':
+    case 'CompilerStopped':
       return new Error(error.cause)
-    case 'tempFolderNotCreated':
-    case 'outputNotRead':
+    case 'TempFolderNotCreated':
+    case 'OutputNotRead':
       return error.original
-    case 'moduleNotFound':
-    case 'workerNotStarted':
-    case 'noPorts':
+    case 'ModuleNotFound':
+    case 'WorkerNotStarted':
+    case 'NoPorts':
       return workerMessage(error)
-    case 'entryNotRead':
-    case 'invalidModule':
+    case 'EntryNotRead':
+    case 'InvalidModule':
       return new Error(CliError.toString(CompileError.toCliError(error)))
   }
 }
@@ -409,7 +409,7 @@ function legacyOptionMessage(option: string): string {
  * @param error - the compile error
  * @returns the message
  */
-function legacyStartMessage(error: Extract<CompileError, { kind: 'compilerNotStarted' }>): string {
+function legacyStartMessage(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): string {
   // `compile` already gave an emitted error the message of the original package.
   return error.original instanceof Error && systemMessages.has(error.original)
     ? error.original.message
@@ -425,10 +425,10 @@ function legacyStartMessage(error: Extract<CompileError, { kind: 'compilerNotSta
  * @returns the message
  */
 function workerMessage(error: CompileError): unknown {
-  switch (error.kind) {
-    case 'compileFailed':
+  switch (error.type_) {
+    case 'CompileFailed':
       return `Errored with exit code ${String(error.exitCode)}\n${error.output}`
-    case 'moduleNotFound': {
+    case 'ModuleNotFound': {
       const hint =
         error.suggestions.length > 1
           ? `\nMaybe you meant one of these: ${error.suggestions.join(',')}`
@@ -438,19 +438,19 @@ function workerMessage(error: CompileError): unknown {
 
       return `I couldn't find the entry module ${error.moduleName}.\n${hint}\nYou can pass me a different module to use with --module=<moduleName>`
     }
-    case 'noPorts':
+    case 'NoPorts':
       // The missing space before `port` is in the original message.
       return `The module ${error.moduleName} doesn't expose any ports!\n\n\nTry adding something likeport foo : Value\nport foo =\n    someValue\n\nto ${error.moduleName}!`
-    case 'workerNotStarted':
+    case 'WorkerNotStarted':
       // The original wrapped the exception of init, whose text starts with its name.
       return `Error: ${error.cause}`
-    case 'unknownOption':
-    case 'compilerNotStarted':
-    case 'compilerStopped':
-    case 'tempFolderNotCreated':
-    case 'outputNotRead':
-    case 'entryNotRead':
-    case 'invalidModule':
+    case 'UnknownOption':
+    case 'CompilerNotStarted':
+    case 'CompilerStopped':
+    case 'TempFolderNotCreated':
+    case 'OutputNotRead':
+    case 'EntryNotRead':
+    case 'InvalidModule':
       return legacyError(error)
   }
 }
