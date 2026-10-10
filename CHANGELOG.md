@@ -202,8 +202,6 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
     reports, without the progress lines, also in the `verbose` log.
   - `compileWorker` names the compiler when it is not installed, instead of
     `Errored with exit code -2`.
-  - `findAllDependencies` logs a file that it cannot read with a message that
-    says what happened and how to fix it, instead of the raw error.
 - `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
   new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
   imports of a file, webpack shows a warning in the layout of the toolkit,
@@ -222,6 +220,14 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   -import { compileToString } from '@elm-toolkit/node-elm-compiler'
   +import { compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
   ```
+
+### Fixed
+
+- `@elm-toolkit/node-elm-compiler`: the deprecated `findAllDependencies`
+  rejects again when the entry file cannot be read or does not start with a
+  valid module declaration, with the same value as the original package. Since
+  0.1.0-alpha.1 it logged the problem and returned the known dependencies, so a
+  caller could not tell a failed search from a module without imports.
 
 ## [0.1.0-alpha.2] - 2026-10-02
 

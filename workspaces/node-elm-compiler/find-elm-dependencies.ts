@@ -496,12 +496,11 @@ export async function findDependencies(
 
 /**
  * Lists every local file that an Elm module imports, as `findDependencies`
- * does, but with the behaviour of the original package: when the search fails,
- * for example because the entry file does not exist, the error is logged and
- * `knownDependencies` is returned unchanged.
+ * does, but with the behaviour of the original package: when the search cannot
+ * start, the promise rejects with the value that the original rejected with.
  *
  * @deprecated Use `findAllDependencies` of `@elm-toolkit/node-elm-compiler/result-api`, which returns a `Result`
- * instead of logging the error.
+ * instead of rejecting.
  *
  * @example
  *
@@ -517,6 +516,8 @@ export async function findDependencies(
  * @param knownFiles - files already visited, which are not read again
  * @returns the absolute paths of the dependencies; `file` itself is absent, unless an
  * import cycle, which Elm rejects, leads back to it
+ * @throws the error of the file system when the entry file cannot be read, and a
+ * string when its first line is not a valid module declaration
  */
 export async function findAllDependencies(
   file: string,
@@ -530,8 +531,33 @@ export async function findAllDependencies(
     case 'Ok':
       return found.value
     case 'Err':
-      console.error(`Error finding dependencies for ${file}:`, CliError.toString(CompileError.toCliError(found.error)))
+      throw legacyDependencyError(found.error)
+  }
+}
 
-      return knownDependencies
+/**
+ * Turns a search that could not start into what the original package rejected
+ * with: the error of the file system, or a string for an invalid module.
+ *
+ * @param error - the error of the search
+ * @returns the value to reject with
+ */
+function legacyDependencyError(error: CompileError): unknown {
+  switch (error.type_) {
+    case 'EntryNotRead':
+      return error.original
+    case 'InvalidModule':
+      return `${error.file} is not a syntactically valid Elm module. Try running \`elm make\` on it manually to figure out what the problem is.`
+    // The search fails only in the two cases above.
+    case 'UnknownOption':
+    case 'CompilerNotStarted':
+    case 'CompilerStopped':
+    case 'CompileFailed':
+    case 'TempFolderNotCreated':
+    case 'OutputNotRead':
+    case 'ModuleNotFound':
+    case 'WorkerNotStarted':
+    case 'NoPorts':
+      return new Error(CliError.toString(CompileError.toCliError(error)))
   }
 }
