@@ -29,7 +29,7 @@ import { Maybe } from './maybe.ts'
 
 /**
  * Either the value of work that succeeded, or the error of work that failed.
- * Read it with `withDefault`, or with a `switch` on `tag`, which must handle
+ * Read it with `withDefault`, or with a `switch` on `type_`, which must handle
  * both cases.
  *
  * @example
@@ -38,7 +38,7 @@ import { Maybe } from './maybe.ts'
  * ```TypeScript
  *   const read: Result<string, number> = Result.Err('elm.json is missing')
  *
- *   switch (read.tag) {
+ *   switch (read.type_) {
  *     case 'Ok':
  *       return read.value
  *     case 'Err':
@@ -75,7 +75,7 @@ export abstract class ResultMethods<E, A> {
    * @returns `Ok` the changed value, or the same `Err`
    */
   public map<B>(this: Result<E, A>, f: (a: A) => B): Result<E, B> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Ok':
         return new OkCase(f(this.value))
       case 'Err':
@@ -97,7 +97,7 @@ export abstract class ResultMethods<E, A> {
    * @returns the same `Ok`, or `Err` with the changed error
    */
   public mapError<F>(this: Result<E, A>, f: (e: E) => F): Result<F, A> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Ok':
         return new OkCase(this.value)
       case 'Err':
@@ -124,7 +124,7 @@ export abstract class ResultMethods<E, A> {
    */
   // F joins the error of the next step, so that Result.Ok(1), whose error is never, can chain a step that fails.
   public andThen<B, F = E>(this: Result<E, A>, f: (a: A) => Result<F, B>): Result<E | F, B> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Ok':
         return f(this.value)
       case 'Err':
@@ -148,7 +148,7 @@ export abstract class ResultMethods<E, A> {
    */
   // B lets a result whose value type is never, such as Result.Err('failed'), take a default of any type.
   public withDefault<B>(this: Result<E, A>, fallback: B): A | B {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Ok':
         return this.value
       case 'Err':
@@ -172,7 +172,7 @@ export abstract class ResultMethods<E, A> {
    * @returns `Just` the value, or `Nothing`
    */
   public toMaybe(this: Result<E, A>): Maybe<NonNullable<A>> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Ok':
         return this.value === null || this.value === undefined ? Maybe.Nothing : Maybe.Just(this.value)
       case 'Err':
@@ -186,15 +186,15 @@ export abstract class ResultMethods<E, A> {
  *
  * @example
  *
- * Read the value after a check of the tag
+ * Read the value after a check of `type_`
  * ```TypeScript
  *   const counted = Result.Ok(64)
- *   counted.tag === 'Ok' ? counted.value : 0 // 64
+ *   counted.type_ === 'Ok' ? counted.value : 0 // 64
  * ```
  */
 export class OkCase<E, A> extends ResultMethods<E, A> {
   /** The case, for a `switch`. */
-  public readonly tag = 'Ok'
+  public readonly type_ = 'Ok'
   /** The value. */
   public readonly value: A
 
@@ -214,17 +214,17 @@ export class OkCase<E, A> extends ResultMethods<E, A> {
  *
  * @example
  *
- * Read the error after a check of the tag
+ * Read the error after a check of `type_`
  * ```TypeScript
  *   const failed = Result.Err('no patches')
- *   failed.tag === 'Err' ? failed.error : '' // 'no patches'
+ *   failed.type_ === 'Err' ? failed.error : '' // 'no patches'
  * ```
  */
 export class ErrCase<E, A> extends ResultMethods<E, A> {
   /** The error. */
   public readonly error: E
   /** The case, for a `switch`. */
-  public readonly tag = 'Err'
+  public readonly type_ = 'Err'
 
   /**
    * Wraps an error. Use `Result.Err` instead.
@@ -335,7 +335,7 @@ async function fromPromise<A>(promise: Promise<A>): Promise<Result<unknown, A>> 
  * @returns `Ok` the value, or `Err` with `error`
  */
 function fromMaybe<E, A extends NonNullable<unknown>>(maybe: Maybe<A>, error: E): Result<E, A> {
-  switch (maybe.tag) {
+  switch (maybe.type_) {
     case 'Just':
       return Ok(maybe.value)
     case 'Nothing':

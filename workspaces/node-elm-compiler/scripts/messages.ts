@@ -7,7 +7,7 @@
  * to the console: the log of `verbose`, the warnings about `elm.json`, the
  * error of the deprecated `findAllDependencies`, and the lines that Elm itself
  * prints. Every case comes from a real call on the projects in
- * `test/fixtures`, with the pinned Elm compiler, except `outputNotRead`, which
+ * `test/fixtures`, with the pinned Elm compiler, except `OutputNotRead`, which
  * no call can cause on purpose.
  *
  * Run it with `corepack yarn workspace @elm-toolkit/node-elm-compiler messages`.
@@ -52,7 +52,7 @@ const scratch = mkdtempSync(path.join(tmpdir(), 'node-elm-compiler-messages-'))
  * @throws an `Error` when the call succeeded, because the script then shows the wrong case
  */
 function errorOf<A>(result: Result<CompileError, A>): CompileError {
-  switch (result.tag) {
+  switch (result.type_) {
     case 'Ok':
       throw new Error('The call succeeded, so this case of the script is out of date.')
     case 'Err':
@@ -156,28 +156,28 @@ chmodSync(notExecutable, 0o644)
 
 const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]> = [
   [
-    'unknownOption: an option that Elm 0.19 removed',
+    'UnknownOption: an option that Elm 0.19 removed',
     (): CompileError => errorOf(prepareProcessArgs('src/Main.elm', { yes: true })),
   ],
   [
-    'unknownOption: an option that Elm 0.19 renamed',
+    'UnknownOption: an option that Elm 0.19 renamed',
     (): CompileError => errorOf(prepareProcessArgs('src/Main.elm', { pathToMake: 'elm' } as CompilerOptions)),
   ],
   [
-    'unknownOption: a misspelled option',
+    'UnknownOption: a misspelled option',
     (): CompileError => errorOf(prepareProcessArgs('src/Main.elm', { optimise: true } as CompilerOptions)),
   ],
   [
-    'compilerNotStarted: ENOENT',
+    'CompilerNotStarted: ENOENT',
     async (): Promise<CompileError> => errorOf(await dryCompile('src/Main.elm', { cwd: app, pathToElm: 'elm-0.19' })),
   ],
   [
-    'compilerNotStarted: EACCES',
+    'CompilerNotStarted: EACCES',
     async (): Promise<CompileError> =>
       errorOf(await dryCompile('src/Main.elm', { cwd: app, pathToElm: notExecutable })),
   ],
   [
-    'compilerNotStarted: a custom spawn that throws',
+    'CompilerNotStarted: a custom spawn that throws',
     (): CompileError =>
       errorOf(
         compile('src/Main.elm', {
@@ -189,53 +189,53 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
       ),
   ],
   [
-    'compilerStopped: timeout',
+    'CompilerStopped: timeout',
     async (): Promise<CompileError> =>
       errorOf(await dryCompile('src/Main.elm', { ...inApp, processOpts: { timeout: 1 } })),
   ],
   [
-    'compilerStopped: maxBuffer',
+    'CompilerStopped: maxBuffer',
     (): CompileError =>
       errorOf(
         compileSync('src/Broken.elm', { ...inApp, output: '/dev/null', processOpts: { maxBuffer: 10, stdio: 'pipe' } })
       ),
   ],
   [
-    'compilerStopped: signal',
+    'CompilerStopped: signal',
     async (): Promise<CompileError> => errorOf(await dryCompile('src/Main.elm', { spawn: killedBy('SIGKILL') })),
   ],
-  ['compileFailed', async (): Promise<CompileError> => errorOf(await dryCompile('src/Broken.elm', inApp))],
+  ['CompileFailed', async (): Promise<CompileError> => errorOf(await dryCompile('src/Broken.elm', inApp))],
   [
-    'tempFolderNotCreated',
+    'TempFolderNotCreated',
     (): Promise<CompileError> =>
       withEnv({ TMPDIR: '/no/such/folder' }, async (): Promise<CompileError> =>
         errorOf(await compileToString('src/Main.elm', inApp))
       ),
   ],
   [
-    'outputNotRead (built by hand, because no call can cause it on purpose)',
+    'OutputNotRead (built by hand, because no call can cause it on purpose)',
     (): CompileError => {
       const cause = "ENOENT: no such file or directory, open '/tmp/node-elm-compiler-x1/elm-output.js'"
 
       return {
         cause,
         file: '/tmp/node-elm-compiler-x1/elm-output.js',
-        kind: 'outputNotRead',
         original: new Error(cause),
+        type_: 'OutputNotRead',
       }
     },
   ],
-  ['moduleNotFound', async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 }))],
+  ['ModuleNotFound', async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 }))],
   [
-    'workerNotStarted',
+    'WorkerNotStarted',
     async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Doubler', { flags: 'three' })),
   ],
-  ['noPorts', async (): Promise<CompileError> => errorOf(await startWorker('NoPorts', 'NoPorts'))],
+  ['NoPorts', async (): Promise<CompileError> => errorOf(await startWorker('NoPorts', 'NoPorts'))],
   [
-    'entryNotRead',
+    'EntryNotRead',
     async (): Promise<CompileError> => errorOf(await findAllDependencies(path.join(app, 'src', 'Missing.elm'))),
   ],
-  ['invalidModule', async (): Promise<CompileError> => errorOf(await findAllDependencies(notAModule))],
+  ['InvalidModule', async (): Promise<CompileError> => errorOf(await findAllDependencies(notAModule))],
 ]
 
 const logs: ReadonlyArray<[string, () => unknown]> = [

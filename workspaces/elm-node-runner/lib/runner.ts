@@ -131,7 +131,7 @@ export async function compileProgram(
 
       const started = compile(elmFiles, { optimize: options.optimize, output, verbose: options.verbose })
 
-      switch (started.tag) {
+      switch (started.type_) {
         case 'Err':
           reject(new Error(CliError.toString(CompileError.toCliError(started.error))))
 

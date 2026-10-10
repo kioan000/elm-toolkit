@@ -29,7 +29,7 @@ import { inject } from './hot/inject.ts'
 /**
  * Result type for promise outcomes.
  */
-type PromiseResult = { kind: 'success'; result: string | boolean } | { error: unknown; kind: 'error' }
+type PromiseResult = { result: string | boolean; type_: 'Success' } | { error: unknown; type_: 'Error' }
 
 /**
  * Webpack loader options for Elm compilation.
@@ -175,7 +175,7 @@ async function dependenciesFor(
     files.map(async (file) => {
       const found = await findAllDependencies(file)
 
-      switch (found.tag) {
+      switch (found.type_) {
         case 'Ok':
           return found.value
         case 'Err':
@@ -264,7 +264,7 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
 
     const started = compile(sources, finalOptions)
 
-    switch (started.tag) {
+    switch (started.type_) {
       case 'Err':
         fs.rmSync(tempDir, { force: true, recursive: true })
         reject(new Error(CliError.toString(CompileError.toCliError(started.error))))
@@ -381,12 +381,12 @@ export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOpti
             this.addDependency(dep)
           })
 
-          return { kind: 'success' as const, result: true }
+          return { result: true, type_: 'Success' as const }
         })
         .catch((error) => {
           this.emitError(error)
 
-          return { error, kind: 'error' as const }
+          return { error, type_: 'Error' as const }
         })
 
       promises.push(dependenciesPromise)
@@ -395,10 +395,10 @@ export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOpti
     // Compile Elm
     const compilationPromise = compileElm(files, options)
       .then((result) => {
-        return { kind: 'success' as const, result }
+        return { result, type_: 'Success' as const }
       })
       .catch((error) => {
-        return { error, kind: 'error' as const }
+        return { error, type_: 'Error' as const }
       })
 
     promises.push(compilationPromise)
@@ -407,7 +407,7 @@ export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOpti
     const results = await Promise.all(promises)
     const output = results[results.length - 1] as PromiseResult
 
-    if (output.kind === 'success') {
+    if (output.type_ === 'Success') {
       const javascript = output.result as string
 
       callback(null, options.hotModuleReplacement === true ? inject(javascript) : javascript)

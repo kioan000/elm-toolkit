@@ -104,7 +104,7 @@ function command(): Command {
  * @param outcome - the outcome of the step
  */
 function exitOnError(outcome: Result<CliError, unknown>): void {
-  switch (outcome.tag) {
+  switch (outcome.type_) {
     case 'Ok':
       return
     case 'Err':

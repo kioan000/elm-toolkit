@@ -16,7 +16,7 @@
 
 /**
  * A value that may be missing. Read it with `withDefault`, or with a `switch`
- * on `tag`, which must handle both cases.
+ * on `type_`, which must handle both cases.
  *
  * @example
  *
@@ -24,7 +24,7 @@
  * ```TypeScript
  *   const port: Maybe<number> = Maybe.Just(8080)
  *
- *   switch (port.tag) {
+ *   switch (port.type_) {
  *     case 'Just':
  *       return port.value // 8080
  *     case 'Nothing':
@@ -62,7 +62,7 @@ export abstract class MaybeMethods<A extends NonNullable<unknown>> {
    */
   // B lets Maybe.Nothing, whose type is Maybe<never>, take a default of any type.
   public withDefault<B>(this: Maybe<A>, fallback: B): A | B {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Just':
         return this.value
       case 'Nothing':
@@ -84,7 +84,7 @@ export abstract class MaybeMethods<A extends NonNullable<unknown>> {
    * @returns `Just` the changed value, or `Nothing`
    */
   public map<B extends NonNullable<unknown>>(this: Maybe<A>, f: (a: A) => B): Maybe<B> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Just':
         return new JustCase(f(this.value))
       case 'Nothing':
@@ -109,7 +109,7 @@ export abstract class MaybeMethods<A extends NonNullable<unknown>> {
    * @returns what `f` returns, or `Nothing` when this maybe is `Nothing`
    */
   public andThen<B extends NonNullable<unknown>>(this: Maybe<A>, f: (a: A) => Maybe<B>): Maybe<B> {
-    switch (this.tag) {
+    switch (this.type_) {
       case 'Just':
         return f(this.value)
       case 'Nothing':
@@ -123,15 +123,15 @@ export abstract class MaybeMethods<A extends NonNullable<unknown>> {
  *
  * @example
  *
- * Read the value after a check of the tag
+ * Read the value after a check of `type_`
  * ```TypeScript
  *   const port = Maybe.Just(8080)
- *   port.tag === 'Just' ? port.value : 3000 // 8080
+ *   port.type_ === 'Just' ? port.value : 3000 // 8080
  * ```
  */
 export class JustCase<A extends NonNullable<unknown>> extends MaybeMethods<A> {
   /** The case, for a `switch`. */
-  public readonly tag = 'Just'
+  public readonly type_ = 'Just'
   /** The value. */
   public readonly value: A
 
@@ -158,7 +158,7 @@ export class JustCase<A extends NonNullable<unknown>> extends MaybeMethods<A> {
  */
 export class NothingCase<A extends NonNullable<unknown>> extends MaybeMethods<A> {
   /** The case, for a `switch`. */
-  public readonly tag = 'Nothing'
+  public readonly type_ = 'Nothing'
 }
 
 /**

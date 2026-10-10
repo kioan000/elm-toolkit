@@ -41,6 +41,19 @@ what is left, so a type error survives and reports nothing. Any script that runs
 `.ts` files directly needs a `tsc` step in front of it, otherwise the types in
 those files are decoration.
 
+## Unions
+
+A union of objects uses `type_` as its discriminant, and the value is the name
+of the case in PascalCase, as an Elm constructor, for example
+`{ type_: 'Ok', value: 3 }` or `{ type_: 'CompileFailed', … }`. The name is the
+same in every package, so a reader learns it once. The trailing underscore
+follows the Elm convention for a reserved word: the field belongs to the union,
+and it cannot clash with a field of data called `type`, such as the one in
+`elm.json`.
+
+The rule covers only the discriminant. A union of strings that is data, such as
+the `reason` of a stopped compiler, keeps its own names.
+
 ## Documentation
 
 ### How to comment

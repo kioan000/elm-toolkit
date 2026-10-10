@@ -37,7 +37,7 @@ async function compileFixture(name: string, mode: 'debug' | 'optimize'): Promise
     pathToElm: findElmBinary(),
   })
 
-  switch (compiled.tag) {
+  switch (compiled.type_) {
     case 'Ok':
       return compiled.value
     case 'Err':

@@ -97,7 +97,7 @@ function writeManifest(patches: unknown): void {
  * @returns the summary and what happened, one per line
  */
 function errorOf(outcome: Result<CliError, unknown>): string {
-  switch (outcome.tag) {
+  switch (outcome.type_) {
     case 'Ok':
       return assert.fail('the step should fail')
     case 'Err':
@@ -272,7 +272,7 @@ describe('the archive builder', () => {
     )
 
     // The patch folder stands for the archive inside it.
-    assert.equal(patchKernel({ elmHome, elmJsonFolder: project, patches: folder }).tag, 'Ok')
+    assert.equal(patchKernel({ elmHome, elmJsonFolder: project, patches: folder }).type_, 'Ok')
 
     assert.deepEqual(readdirSync(path.join(elmHome, '0.19.1', 'packages', 'elm', 'html', '1.0.1')).sort(), [
       'LICENSE',

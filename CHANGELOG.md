@@ -85,7 +85,7 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
     +patchKernel({ elmJsonFolder: 'frontend' })
     ```
 
-  - Instead of catching an error, check the `tag` of the result; an `Err`
+  - Instead of catching an error, check the `type_` of the result; an `Err`
     holds a `CliError`, which `CliError.toString` turns into text.
   - With `false` as the first argument, also add `patches`, as described above.
   - Code that reads the returned paths reads `PATCHES` instead.

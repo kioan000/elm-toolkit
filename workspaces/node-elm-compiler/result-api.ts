@@ -4,7 +4,7 @@
  *
  * The functions have the names of the original API of this package, at its
  * root, and the same options; only the way they report a failure differs. A
- * failure is a `CompileError`, a value with a `kind` that a caller can inspect,
+ * failure is a `CompileError`, a value with a `type_` that a caller can inspect,
  * and `CompileError.toCliError` turns it into a message for a person.
  *
  * Start with `compileToString`, which returns the generated JavaScript, and
@@ -178,7 +178,7 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
  * Fail a build script when the compiler reports an error
  * ```TypeScript
  *   const compileSyncResult = compileSync('src/Main.elm', { output: 'dist/main.js' })
- *   if (compileSyncResult.tag === 'Err') process.exit(1)
+ *   if (compileSyncResult.type_ === 'Err') process.exit(1)
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
@@ -232,7 +232,7 @@ export async function compileToString(
 ): Promise<Result<CompileError, string>> {
   const temporary = temporaryOutput(getSuffix(options.output, '.js'))
 
-  if (temporary.tag === 'Err') {
+  if (temporary.type_ === 'Err') {
     return Result.Err(temporary.error)
   }
 
@@ -241,12 +241,12 @@ export async function compileToString(
   try {
     const built = await runToTheEnd(sources, { ...options, output })
 
-    if (built.tag === 'Err') {
+    if (built.type_ === 'Err') {
       return built
     }
 
     return (await Result.fromPromise(readFile(output, { encoding: 'utf8' }))).mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file: output, kind: 'outputNotRead', original: caught }
+      return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
     })
   } finally {
     cleanupTempFileSync(output)
@@ -275,7 +275,7 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
     try {
       return compileSync(sources, { ...options, output }).andThen(() =>
         Result.fromAttempt(() => readFileSync(output, { encoding: 'utf8' })).mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: output, kind: 'outputNotRead', original: caught }
+          return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
         })
       )
     } finally {
@@ -295,7 +295,7 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  * ```TypeScript
  *   const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
  *
- *   switch (dryCompileResult.tag) {
+ *   switch (dryCompileResult.type_) {
  *     case 'Ok':
  *       return console.log('The program compiles.')
  *     case 'Err':
@@ -345,11 +345,11 @@ export async function compileWorker(
 ): Promise<Result<CompileError, WorkerWithPorts>> {
   const temporary = (await Result.fromPromise(mkdtemp(path.join(tmpdir(), 'node-elm-compiler-')))).mapError(
     (caught): CompileError => {
-      return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated', original: caught }
+      return { cause: messageOf(caught), folder: tmpdir(), original: caught, type_: 'TempFolderNotCreated' }
     }
   )
 
-  if (temporary.tag === 'Err') {
+  if (temporary.type_ === 'Err') {
     return Result.Err(temporary.error)
   }
 
@@ -416,7 +416,7 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
   const pathToElm = options.pathToElm || elmBinaryName
   const started = compile(sources, { ...options, processOpts: { ...options.processOpts, stdio: 'pipe' } })
 
-  if (started.tag === 'Err') {
+  if (started.type_ === 'Err') {
     return Result.Err(started.error)
   }
 
@@ -493,9 +493,9 @@ function syncRunError(err: Error, pathToElm: string): CompileError {
 
   switch (code) {
     case 'ETIMEDOUT':
-      return { cause: err.message, kind: 'compilerStopped', original: err, pathToElm, reason: 'timeout' }
+      return { cause: err.message, original: err, pathToElm, reason: 'timeout', type_: 'CompilerStopped' }
     case 'ENOBUFS':
-      return { cause: err.message, kind: 'compilerStopped', original: err, pathToElm, reason: 'maxBuffer' }
+      return { cause: err.message, original: err, pathToElm, reason: 'maxBuffer', type_: 'CompilerStopped' }
 
     default:
       return startError(err, pathToElm)
@@ -516,10 +516,10 @@ function stoppedBySignal(signal: string, processOpts: CompilerOptions['processOp
 
   return {
     cause: signal,
-    kind: 'compilerStopped',
     original: signal,
     pathToElm,
     reason: timedOut ? 'timeout' : 'signal',
+    type_: 'CompilerStopped',
   }
 }
 
@@ -548,9 +548,9 @@ function outcome(
     ? Result.Ok(messages)
     : Result.Err({
         exitCode,
-        kind: 'compileFailed',
         output: stderr.trim() === '' ? messages : stderr,
         sources: toList(sources),
+        type_: 'CompileFailed',
       })
 }
 
@@ -578,7 +578,7 @@ function asTerminalShows(stdout: string): string {
  */
 function temporaryOutput(suffix: string): Result<CompileError, string> {
   return Result.fromAttempt(() => makeTempOutputPathSync(suffix)).mapError((caught): CompileError => {
-    return { cause: messageOf(caught), folder: tmpdir(), kind: 'tempFolderNotCreated', original: caught }
+    return { cause: messageOf(caught), folder: tmpdir(), original: caught, type_: 'TempFolderNotCreated' }
   })
 }
 
@@ -613,7 +613,7 @@ function startWorker(
     () => (require(file) as { Elm: Record<string, { init(args?: unknown): Partial<WorkerWithPorts> }> }).Elm
   )
     .mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file, kind: 'outputNotRead', original: caught }
+      return { cause: messageOf(caught), file, original: caught, type_: 'OutputNotRead' }
     })
     .andThen((elm): Result<CompileError, WorkerWithPorts> => {
       const module_ = elm[moduleName]
@@ -621,21 +621,21 @@ function startWorker(
       if (module_ === undefined) {
         return Result.Err({
           file: modulePath,
-          kind: 'moduleNotFound',
           moduleName,
           suggestions: Object.keys(elm).filter((name) => !knownModules.has(name)),
+          type_: 'ModuleNotFound',
         })
       }
 
       return Result.fromAttempt(() => module_.init(workerArgs))
         .mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: modulePath, kind: 'workerNotStarted', moduleName, original: caught }
+          return { cause: messageOf(caught), file: modulePath, moduleName, original: caught, type_: 'WorkerNotStarted' }
         })
         .andThen((worker): Result<CompileError, WorkerWithPorts> =>
           // Elm leaves `ports` out entirely when a module declares none.
           worker.ports && Object.keys(worker.ports).length > 0
             ? Result.Ok({ ...worker, ports: worker.ports })
-            : Result.Err({ file: modulePath, kind: 'noPorts', moduleName })
+            : Result.Err({ file: modulePath, moduleName, type_: 'NoPorts' })
         )
     })
 }

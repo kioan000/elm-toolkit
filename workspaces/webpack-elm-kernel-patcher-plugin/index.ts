@@ -116,7 +116,7 @@ export default class ElmKernelPatcherPlugin {
         const { elmHome, elmJsonFolder, patches } = this.options
         const patched = patchKernel({ elmHome, elmJsonFolder, patches })
 
-        switch (patched.tag) {
+        switch (patched.type_) {
           case 'Ok':
             return
           case 'Err':
