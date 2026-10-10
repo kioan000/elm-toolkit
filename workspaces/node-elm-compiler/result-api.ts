@@ -177,8 +177,8 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
  *
  * Fail a build script when the compiler reports an error
  * ```TypeScript
- *   const compileSyncResult = compileSync('src/Main.elm', { output: 'dist/main.js' })
- *   if (compileSyncResult.tag === 'Err') process.exit(1)
+ *   const built = compileSync('src/Main.elm', { output: 'dist/main.js' })
+ *   if (built.tag === 'Err') process.exit(1)
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
@@ -217,8 +217,8 @@ export function compileSync(sources: Sources, options: CompilerOptions): Result<
  *
  * Compile an optimized bundle and write it where the server expects it
  * ```TypeScript
- *   const compileToStringResult = await compileToString('src/Main.elm', { optimize: true })
- *   compileToStringResult.map((javascript) => writeFileSync('public/main.js', javascript))
+ *   const compiled = await compileToString('src/Main.elm', { optimize: true })
+ *   compiled.map((javascript) => writeFileSync('public/main.js', javascript))
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
@@ -262,7 +262,7 @@ export async function compileToString(
  *
  * Compile a module inside a synchronous build step
  * ```TypeScript
- *   const compileToStringSyncResult = compileToStringSync('src/Main.elm', { optimize: true })
+ *   const compiled = compileToStringSync('src/Main.elm', { optimize: true })
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
@@ -293,13 +293,13 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  *
  * Check a program before a release
  * ```TypeScript
- *   const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
+ *   const checked = await dryCompile('src/Main.elm', { cwd: 'frontend' })
  *
- *   switch (dryCompileResult.tag) {
+ *   switch (checked.tag) {
  *     case 'Ok':
  *       return console.log('The program compiles.')
  *     case 'Err':
- *       return CliError.print('elm make', CompileError.toCliError(dryCompileResult.error))
+ *       return CliError.print('elm make', CompileError.toCliError(checked.error))
  *   }
  * ```
  *
@@ -325,7 +325,7 @@ export async function dryCompile(sources: Sources, options: CompilerOptions): Pr
  *
  * Start a worker and listen to one of its ports
  * ```TypeScript
- *   const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+ *   const started = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
  * ```
  *
  * @param projectRootDir - the directory that contains `elm.json`
@@ -373,7 +373,7 @@ export async function compileWorker(
  *
  * Find what a page depends on
  * ```TypeScript
- *   const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.elm')
+ *   await findAllDependencies('/app/src/Page/Home.elm')
  *   // Ok ['/app/src/Api.elm', '/app/src/Ui/Button.elm']
  * ```
  *

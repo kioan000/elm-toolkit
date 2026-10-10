@@ -32,14 +32,14 @@ error holds the messages of Elm.
 import { CliError } from '@elm-toolkit/cli-lib'
 import { CompileError, compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const compileToStringResult = await compileToString('src/Main.elm', { debug: true })
+const compiled = await compileToString('src/Main.elm', { debug: true })
 
-switch (compileToStringResult.tag) {
+switch (compiled.tag) {
   case 'Ok':
-    console.log(`${compileToStringResult.value.length} characters of JavaScript`)
+    console.log(`${compiled.value.length} characters of JavaScript`)
     break
   case 'Err':
-    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
+    CliError.print('elm make', CompileError.toCliError(compiled.error))
 }
 ```
 
@@ -65,7 +65,7 @@ commit hook or a CI step.
 ```ts
 import { dryCompile } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
+const checked = await dryCompile('src/Main.elm', { cwd: 'frontend' })
 // Ok, or Err with kind 'compileFailed' and the messages of Elm
 ```
 
@@ -80,7 +80,7 @@ and follows every import that resolves to a file in a source directory of
 ```ts
 import { findAllDependencies } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.elm')
+await findAllDependencies('/app/src/Page/Home.elm')
 // Ok ['/app/src/Api.elm', '/app/src/Ui/Button.elm']
 ```
 
@@ -105,14 +105,14 @@ where the old code caught an exception.
 -} catch (error) {
 -  console.error(error)
 -}
-+const compileToStringResult = await compileToString('src/Main.elm', options)
++const compiled = await compileToString('src/Main.elm', options)
 +
-+switch (compileToStringResult.tag) {
++switch (compiled.tag) {
 +  case 'Ok':
-+    await writeFile('public/main.js', compileToStringResult.value)
++    await writeFile('public/main.js', compiled.value)
 +    break
 +  case 'Err':
-+    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
++    CliError.print('elm make', CompileError.toCliError(compiled.error))
 +}
 ```
 

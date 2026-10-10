@@ -458,7 +458,7 @@ function isUnchanged(cached: CachedElmJsonMatch): boolean {
  *
  * Find what a page depends on
  * ```TypeScript
- *   const dependenciesSearchResult = await findDependencies('/app/src/Page/Home.elm')
+ *   await findDependencies('/app/src/Page/Home.elm')
  *   // Ok ['/app/src/Api.elm', '/app/src/Ui/Button.elm']
  * ```
  *
