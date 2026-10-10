@@ -19,6 +19,7 @@ import { CliError, Maybe, type Result } from '@elm-toolkit/cli-lib'
 import {
   CompileError,
   type CompilerOptions,
+  type WorkerWithPorts,
   compile,
   compileSync,
   compileToString,
@@ -440,6 +441,90 @@ describe('compileWorker', () => {
 
     assert.equal(error.type_, 'CompileFailed')
     assert.match(error.type_ === 'CompileFailed' ? error.output : '', /TYPE MISMATCH/)
+  })
+
+  /**
+   * Runs a function with the given `PATH`, and restores the original one after.
+   *
+   * @param pathValue - the `PATH` to use
+   * @param run - the function to run
+   * @returns what the function returns
+   */
+  function withPath<A>(pathValue: string, run: () => Promise<A>): Promise<A> {
+    const originalPath = process.env.PATH
+
+    process.env.PATH = pathValue
+
+    return run().finally(() => {
+      process.env.PATH = originalPath
+    })
+  }
+
+  /**
+   * Sends a value to a running Doubler and waits for its answer.
+   *
+   * @param worker - a worker of the Doubler module
+   * @param value - the value to send
+   * @returns the value that the worker answers
+   */
+  function answer(worker: WorkerWithPorts, value: number): Promise<unknown> {
+    const ports = worker.ports as {
+      input: { send: (value: number) => void }
+      output: { subscribe: (listener: (value: unknown) => void) => void }
+    }
+    const answered = new Promise((resolve) => {
+      ports.output.subscribe(resolve)
+    })
+
+    ports.input.send(value)
+
+    return answered
+  }
+
+  it('gives each call its own instance of the program', async () => {
+    const triple = valueOf(await startWorker('Doubler', 'Doubler', { flags: 3 }))
+    const quintuple = valueOf(await startWorker('Doubler', 'Doubler', { flags: 5 }))
+
+    assert.deepEqual(await Promise.all([answer(triple, 2), answer(quintuple, 2)]), [6, 10])
+  })
+
+  it('returns only the ports of the program, and adds nothing to the globals', async () => {
+    const worker = valueOf(await startWorker('Doubler', 'Doubler', { flags: 3 }))
+
+    assert.deepEqual(Object.keys(worker), ['ports'])
+    assert.equal('Elm' in globalThis, false)
+  })
+
+  it('accepts a project directory relative to the working directory of the process', async () => {
+    const pathWithElm = `${path.dirname(elm)}${path.delimiter}${process.env.PATH ?? ''}`
+    const worker = valueOf(
+      await withPath(pathWithElm, () =>
+        compileWorker(path.relative(process.cwd(), app), 'src/Doubler.elm', 'Doubler', { flags: 3 })
+      )
+    )
+
+    assert.equal(await answer(worker, 7), 21)
+  })
+
+  it('removes its temporary folder when the build fails', async () => {
+    const before = temporaryDirectories()
+
+    await startWorker('Broken', 'Broken')
+
+    assert.deepEqual(temporaryDirectories(), before)
+  })
+
+  it('returns a missing compiler as a compiler that did not start', async () => {
+    const empty = mkdtempSync(path.join(tmpdir(), 'result-api-'))
+
+    try {
+      const error = errorOf(await withPath(empty, () => compileWorker(app, 'src/Doubler.elm', 'Doubler', { flags: 3 })))
+
+      assert.equal(error.type_, 'CompilerNotStarted')
+      assert.deepEqual(error.type_ === 'CompilerNotStarted' ? error.code : undefined, Maybe.Just('ENOENT'))
+    } finally {
+      rmSync(empty, { force: true, recursive: true })
+    }
   })
 })
 

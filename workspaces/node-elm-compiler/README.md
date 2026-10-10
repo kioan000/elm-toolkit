@@ -138,6 +138,36 @@ way round. Each version also keeps its own package cache, in `ELM_HOME/0.19.1`
 and `ELM_HOME/0.19.2`, so the first build after a change of version downloads the
 packages again.
 
+### Differences from the original package
+
+The deprecated API keeps the behaviour of `node-elm-compiler` 5.0.6 and
+`find-elm-dependencies` 2.0.4, which are no longer maintained, with the
+differences below. Each one is on purpose, and `test/compatibility.test.ts`
+checks it, next to the behaviour that must stay as it was. When a change makes
+one of the other checks fail, it breaks code written for the original package.
+
+- An option that the package does not know, and an `Error` that a custom
+  `spawn` throws, are thrown as an `Error`. The original threw the message as a
+  JSON string, with quotes around it.
+- A compiler that is not installed is reported as an error. The original
+  crashed the whole Node process from `compile`, `compileToString` and
+  `compileWorker`.
+- Sources that are neither a string nor a list are reported with a message that
+  says so. The original blamed the compiler.
+- A failed build of `compileToString` holds only the problems that Elm reports,
+  without the progress lines.
+- A failed build of `compileWorker` holds the problems that Elm reports. The
+  original printed them and said only the exit code.
+- A module without ports in `compileWorker` gets the message about ports. The
+  original failed with a `TypeError` of its own code.
+- `compileWorker` does not change the working directory of the process while
+  Elm runs, and removes its temporary folder at once. The original changed the
+  directory, and removed the folder when the process ended.
+- `compileToString` keeps the `processOpts` of the caller. The original replaced
+  them.
+- `findAllDependencies` returns a promise also for a file that is already
+  known. The original returned the array itself.
+
 ## Requirements
 
 Node 24, and an `elm` binary on the `PATH` or given with `pathToElm`. The package

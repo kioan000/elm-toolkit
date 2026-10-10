@@ -4,8 +4,10 @@
  *
  * Every run puts the directory of the real Elm 0.19.2 compiler, from the `elm`
  * dev dependency, first on the `PATH`, because the runner calls `elm` by name.
- * The compiler prints its progress to standard error, and the programs print to
- * standard output, so most checks read both together.
+ * The compiler prints its progress to standard output and its problems to
+ * standard error, while it builds; the programs print to standard output. Most
+ * checks read both streams together, and the checks of the build read each one
+ * on its own, so that a change of stream shows up as a failure.
  *
  * @packageDocumentation
  */
@@ -33,14 +35,14 @@ const pathWithElm = `${path.dirname(findElmBinary())}${path.delimiter}${process.
 function run(
   args: string[],
   settings: { cwd?: string; path?: string } = {}
-): { output: string; status: number | null; stdout: string } {
+): { output: string; status: number | null; stderr: string; stdout: string } {
   const result = spawnSync(process.execPath, [command, ...args], {
     cwd: settings.cwd ?? project,
     encoding: 'utf8',
     env: { ...process.env, PATH: settings.path ?? pathWithElm },
   })
 
-  return { output: result.stdout + result.stderr, status: result.status, stdout: result.stdout }
+  return { output: result.stdout + result.stderr, status: result.status, stderr: result.stderr, stdout: result.stdout }
 }
 
 describe('elm-node-runner', () => {
@@ -63,6 +65,14 @@ describe('elm-node-runner', () => {
     assert.equal(result.status, 0)
     assert.match(result.stdout, /^Hello from Main$/m)
     assert.match(result.stdout, /^eval can reach function$/m, 'the evaluated code should see the global app')
+  })
+
+  it('shows the progress of Elm on standard output while it builds, before the program prints', () => {
+    const { stdout } = run(['src/Main.elm'])
+
+    assert.match(stdout, /Success!/)
+    assert.match(stdout, /Main ─+> \S*elm-node-runner-\w+\/elm\.js/)
+    assert.ok(stdout.indexOf('Success!') < stdout.indexOf('Hello from Main'), 'the build output comes first')
   })
 
   it('gives the launcher the Elm object, with every compiled module', () => {
@@ -116,8 +126,9 @@ describe('elm-node-runner', () => {
       const result = run(['src/Broken.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.output, /TYPE MISMATCH/)
-      assert.match(result.output, /The Elm compiler reported an error/)
+      assert.match(result.stderr, /^-- TYPE MISMATCH/m, 'the problems of Elm go to standard error, as Elm writes them')
+      assert.match(result.stdout, /ERROR:elm-node-runner\S* The Elm compiler reported an error\.$/m)
+      assert.doesNotMatch(result.stdout, /TYPE MISMATCH/, 'the summary does not repeat the problems')
     })
 
     it('when there is no launcher and no module called Main', () => {
@@ -162,7 +173,7 @@ describe('elm-node-runner', () => {
         const result = run(['src/Main.elm'], { path: emptyDirectory })
 
         assert.equal(result.status, 1)
-        assert.match(result.output, /Could not find Elm compiler "elm"/)
+        assert.match(result.stdout, /ERROR:elm-node-runner\S* Could not find Elm compiler "elm"\. Is it installed\?$/m)
       } finally {
         rmSync(emptyDirectory, { force: true, recursive: true })
       }

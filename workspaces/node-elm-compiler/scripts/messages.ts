@@ -251,10 +251,6 @@ const logs: ReadonlyArray<[string, () => unknown]> = [
     (): unknown => findAllDependencies(projectWith('{ "type": "application" }')),
   ],
   [
-    'error: findAllDependencies of the deprecated API, for a file that does not exist',
-    (): unknown => legacy.findAllDependencies(path.join(app, 'src', 'Missing.elm')),
-  ],
-  [
     'the Elm runtime, when compileWorker starts a module built without --optimize',
     (): unknown => startWorker('Doubler', 'Doubler', { flags: 3 }),
   ],
