@@ -13,11 +13,10 @@ import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CliError } from '@elm-toolkit/cli-lib'
+import { CliError, findElmBinary } from '@elm-toolkit/cli-lib'
 import { CompileError, compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
 
 import { inject } from '../hot/inject.ts'
-import { findElmBinary } from './elm-binary.ts'
 
 const project = path.join(import.meta.dirname, 'fixtures', 'project')
 const wrapperEnd = '}(this));'
@@ -34,7 +33,7 @@ async function compileFixture(name: string, mode: 'debug' | 'optimize'): Promise
   const compiled = await compileToString(path.join(project, 'src', `${name}.elm`), {
     cwd: project,
     [mode]: true,
-    pathToElm: findElmBinary(),
+    pathToElm: findElmBinary(import.meta.url),
   })
 
   switch (compiled.type_) {

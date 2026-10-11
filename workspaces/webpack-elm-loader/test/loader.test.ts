@@ -17,8 +17,9 @@ import path from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { findElmBinary } from '@elm-toolkit/cli-lib'
+
 import elmWebpackLoader from '../index.ts'
-import { findElmBinary } from './elm-binary.ts'
 
 type LoaderContext = ThisParameterType<typeof elmWebpackLoader>
 
@@ -32,7 +33,7 @@ type LoaderRun = {
 const project = path.join(import.meta.dirname, 'fixtures', 'project')
 const source = (name: string): string => path.join(project, 'src', `${name}.elm`)
 const main = source('Main')
-const inProject = { cwd: project, pathToElm: findElmBinary() }
+const inProject = { cwd: project, pathToElm: findElmBinary(import.meta.url) }
 
 // The watch tests below need only what the loader reads before it compiles, and a real compiler
 // started in a folder without elm.json would wait for an answer on the terminal.

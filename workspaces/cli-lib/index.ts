@@ -7,8 +7,9 @@
  * pair answers questions a module has about itself: whether it was started by
  * Node or imported, and where its own manifest is.
  *
- * The two self inspection functions take the caller's `import.meta.url`, because
- * the answer concerns the calling module and not this one.
+ * The self inspection functions take the caller's `import.meta.url`, because
+ * the answer concerns the calling module and not this one. `findElmBinary` does
+ * the same, to find the Elm compiler that the calling package pins.
  *
  * `Maybe` and `Result` bring the types of the same names from `elm/core`, with
  * their functions. A step that can fail returns a `Result` with a `CliError`
@@ -20,6 +21,7 @@
 
 import { type SpawnOptionsWithoutStdio, spawn } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -191,6 +193,34 @@ export function isEntryPoint(moduleUrl: string): boolean {
     // A non existent or unreadable argv[1] means we cannot claim to be the entry point
     return false
   }
+}
+
+/**
+ * Finds the `elm` executable of the `elm` package that the calling package
+ * depends on, so that the tests and the scripts of a package run the compiler
+ * it pins, and never a global `elm`. `ELM_TEST_BINARY` replaces it with
+ * another executable, so that CI runs the same tests with every Elm version
+ * that the toolkit supports.
+ *
+ * The function takes the caller's `import.meta.url`, because the `elm` package
+ * belongs to the calling package and not to this one.
+ *
+ * @example
+ *
+ * Compile with the compiler that the package pins
+ * ```TypeScript
+ *   await compileToString('src/Main.elm', { pathToElm: findElmBinary(import.meta.url) })
+ * ```
+ *
+ * @param moduleUrl - the `import.meta.url` of the calling module
+ * @returns the absolute path of the executable
+ * @throws an `Error` from Node when the calling package cannot resolve `elm`
+ */
+export function findElmBinary(moduleUrl: string): string {
+  return (
+    process.env.ELM_TEST_BINARY ??
+    path.join(path.dirname(createRequire(moduleUrl).resolve('elm/package.json')), 'bin', 'elm')
+  )
 }
 
 /**

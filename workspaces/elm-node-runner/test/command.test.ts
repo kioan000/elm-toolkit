@@ -18,11 +18,11 @@ import path from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { findElmBinary } from './elm-binary.ts'
+import { findElmBinary } from '@elm-toolkit/cli-lib'
 
 const command = path.join(import.meta.dirname, '..', 'command.ts')
 const project = path.join(import.meta.dirname, 'fixtures', 'project')
-const pathWithElm = `${path.dirname(findElmBinary())}${path.delimiter}${process.env.PATH}`
+const pathWithElm = `${path.dirname(findElmBinary(import.meta.url))}${path.delimiter}${process.env.PATH}`
 
 /**
  * Runs the command and waits for it to end.
@@ -78,11 +78,11 @@ describe('elm-node-runner', () => {
 
   it('reports the build that succeeds, before what the program prints', () => {
     const lines = flat(run(['src/Main.elm']).stdout)
+    // Elm runs a batch port by port, in the order of the compiled code: by name up to 0.19.2, as declared from 0.19.3.
+    const program = / What the program prints follows\. (.*) $/.exec(lines)?.[1] ?? ''
 
-    assert.match(
-      lines,
-      /^ DONE:compiled successfully\S* src\/Main\.elm What happened: Main starts now\. What the program prints follows\. eval can reach function Hello from Main $/
-    )
+    assert.match(lines, /^ DONE:compiled successfully\S* src\/Main\.elm What happened: Main starts now\. /)
+    assert.deepEqual(program.split(/ (?=eval|Hello)/).sort(), ['Hello from Main', 'eval can reach function'])
   })
 
   it('names the launcher in the report of the build', () => {
@@ -193,7 +193,7 @@ describe('elm-node-runner', () => {
       assert.equal(result.status, 1)
       assert.match(
         result.stdout,
-        /ERROR:Elm program crashed before it started\S* TODO in module `CrashesOnLoad` on line 11$/m
+        /ERROR:Elm program crashed before it started\S* TODO in module `CrashesOnLoad` on line \d+$/m
       )
     })
 

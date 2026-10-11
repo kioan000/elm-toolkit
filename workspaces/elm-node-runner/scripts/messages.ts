@@ -17,11 +17,11 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { findElmBinary } from '../test/elm-binary.ts'
+import { findElmBinary } from '@elm-toolkit/cli-lib'
 
 const command = path.join(import.meta.dirname, '..', 'command.ts')
 const project = path.join(import.meta.dirname, '..', 'test', 'fixtures', 'project')
-const pathWithElm = `${path.dirname(findElmBinary())}${path.delimiter}${process.env.PATH ?? ''}`
+const pathWithElm = `${path.dirname(findElmBinary(import.meta.url))}${path.delimiter}${process.env.PATH ?? ''}`
 const scratch = mkdtempSync(path.join(tmpdir(), 'elm-node-runner-messages-'))
 
 /**

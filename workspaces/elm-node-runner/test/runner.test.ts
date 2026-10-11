@@ -16,10 +16,9 @@ import path from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { Maybe, type Result } from '@elm-toolkit/cli-lib'
+import { Maybe, type Result, findElmBinary } from '@elm-toolkit/cli-lib'
 
 import { type ElmNamespace, RunnerError, compileProgram, runElm, startMain, startProgram } from '../lib/runner.ts'
-import { findElmBinary } from './elm-binary.ts'
 
 const project = path.join(import.meta.dirname, 'fixtures', 'project')
 const originalDirectory = process.cwd()
@@ -79,7 +78,7 @@ function errorOf<A>(result: Result<RunnerError, A>): RunnerError {
 
 before(() => {
   process.chdir(project)
-  process.env.PATH = `${path.dirname(findElmBinary())}${path.delimiter}${originalEnv.PATH ?? ''}`
+  process.env.PATH = `${path.dirname(findElmBinary(import.meta.url))}${path.delimiter}${originalEnv.PATH ?? ''}`
   process.env.TMPDIR = privateTemporary
 })
 
@@ -136,7 +135,7 @@ describe('compileProgram', () => {
     const error = errorOf(await compileProgram(['src/CrashesOnLoad.elm']))
 
     assert.equal(error.type_, 'ProgramNotLoaded')
-    assert.equal(RunnerError.toCliError(error).summary, 'TODO in module `CrashesOnLoad` on line 11')
+    assert.match(RunnerError.toCliError(error).summary, /^TODO in module `CrashesOnLoad` on line \d+$/)
   })
 
   it('prints the compiler command and the messages of Elm with verbose, and nothing without it', async (t) => {
@@ -162,10 +161,11 @@ describe('startMain', () => {
     await settle()
 
     assert.equal((globalThis as { app?: unknown }).app, app)
-    assert.deepEqual(
-      logged.mock.calls.map((call) => call.arguments[0]),
-      ['eval can reach function', 'Hello from Main']
-    )
+    // Elm runs a batch port by port, in the order of the compiled code: by name up to 0.19.2, as declared from 0.19.3.
+    assert.deepEqual(logged.mock.calls.map((call) => call.arguments[0]).sort(), [
+      'Hello from Main',
+      'eval can reach function',
+    ])
   })
 
   it('returns NoMain with the modules of the build when none is called Main', async () => {

@@ -158,6 +158,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ### Added
 
+- `@elm-toolkit/cli-lib`: `findElmBinary`, which finds the `elm` executable that
+  the calling package depends on. `ELM_TEST_BINARY` replaces it with another
+  one, for example to run tests with an older Elm.
 - `@elm-toolkit/cli-lib`: `Maybe` and `Result`, with the functions of the
   modules of the same names in `elm/core` as methods, so that the steps read
   from top to bottom: `Result.fromAttempt(read).map(parse).mapError(describe)`.

@@ -18,6 +18,8 @@ import path from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { findElmBinary } from '@elm-toolkit/cli-lib'
+
 import {
   type CompilerOptions,
   type CompilerProcessOptions,
@@ -28,9 +30,8 @@ import {
   compileToStringSync,
   compileWorker,
 } from '../index.ts'
-import { findElmBinary } from './elm-binary.ts'
 
-const elm = findElmBinary()
+const elm = findElmBinary(import.meta.url)
 const missingElm = path.join(import.meta.dirname, 'no-such-elm')
 const app = path.join(import.meta.dirname, 'fixtures', 'app')
 const source = (name: string): string => path.join(app, 'src', `${name}.elm`)

@@ -14,7 +14,7 @@ import path from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CliError, Maybe, type Result } from '@elm-toolkit/cli-lib'
+import { CliError, Maybe, type Result, findElmBinary } from '@elm-toolkit/cli-lib'
 
 import {
   CompileError,
@@ -34,9 +34,8 @@ import {
   prepareProcessArgs,
 } from '../result-api.ts'
 import type { SyncCompilerResult } from '../process.ts'
-import { findElmBinary } from './elm-binary.ts'
 
-const elm = findElmBinary()
+const elm = findElmBinary(import.meta.url)
 const missingElm = path.join(import.meta.dirname, 'no-such-elm')
 const app = path.join(import.meta.dirname, 'fixtures', 'app')
 const imports = path.join(import.meta.dirname, 'fixtures', 'imports')
@@ -570,7 +569,8 @@ describe('compileWorker', () => {
       'Elm program crashed before it started',
       'the title is the one of the load error'
     )
-    assert.equal(CompileError.toCliError(error).summary, 'TODO in module `CrashesOnLoad` on line 11')
+    // Elm 0.19.2 names the line of the definition, and 0.19.3 the line of Debug.todo.
+    assert.match(CompileError.toCliError(error).summary, /^TODO in module `CrashesOnLoad` on line \d+$/)
   })
 
   /**
