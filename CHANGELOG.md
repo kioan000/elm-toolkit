@@ -8,6 +8,8 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-10-11
+
 ### What's new
 
 This alpha is about two things: a better API for people who build tools on top
@@ -269,6 +271,7 @@ and they are not on the npm registry.
 - `@elm-toolkit/elm-node-runner`: a command that runs an Elm program in Node.
 - `@elm-toolkit/cli-lib`: the helpers that the command line tools share.
 
-[Unreleased]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.3...HEAD
+[0.1.0-alpha.3]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/kioan000/elm-toolkit/releases/tag/v0.1.0-alpha.1

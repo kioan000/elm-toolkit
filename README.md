@@ -34,7 +34,7 @@ version. Point the dependency at the URL of the archive:
 ```json
 {
   "dependencies": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.2/elm-toolkit-node-elm-compiler-0.1.0-alpha.2.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.3/elm-toolkit-node-elm-compiler-0.1.0-alpha.3.tgz"
   }
 }
 ```
@@ -51,11 +51,11 @@ registry, so it also needs them in `resolutions`:
 ```json
 {
   "dependencies": {
-    "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.2/elm-toolkit-webpack-elm-loader-0.1.0-alpha.2.tgz",
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.2/elm-toolkit-node-elm-compiler-0.1.0-alpha.2.tgz"
+    "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.3/elm-toolkit-webpack-elm-loader-0.1.0-alpha.3.tgz",
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.3/elm-toolkit-node-elm-compiler-0.1.0-alpha.3.tgz"
   },
   "resolutions": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.2/elm-toolkit-node-elm-compiler-0.1.0-alpha.2.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.3/elm-toolkit-node-elm-compiler-0.1.0-alpha.3.tgz"
   }
 }
 ```
