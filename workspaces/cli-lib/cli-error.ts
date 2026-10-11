@@ -18,7 +18,7 @@
  */
 
 import { prettyError } from './index.ts'
-import { type Section, printSections, sectionsToString } from './layout.ts'
+import { type Section, continuingSentence, printSections, sectionsToString } from './layout.ts'
 import { Maybe } from './maybe.ts'
 
 /**
@@ -189,7 +189,8 @@ function toString(error: CliError): string {
 
 /**
  * Prints an error the way every command of the toolkit does. The first line
- * holds the title and the summary, highlighted in red. Below it come the
+ * holds the title, highlighted in red, and the summary, which continues its
+ * sentence and so starts in lower case, as `continuingSentence` makes it. Below it come the
  * sections that have content, each after a blank line: "What happened:",
  * "Details:" with the messages of another program, "How to fix:" with the
  * solution, its label in green, and "Stack trace:" with the stack in grey.
@@ -209,7 +210,7 @@ function toString(error: CliError): string {
  * @param error - the error to print
  */
 function print(title: string, error: CliError): void {
-  prettyError(title, error.summary)
+  prettyError(title, continuingSentence(error.summary))
   printSections(sections(error))
 }
 

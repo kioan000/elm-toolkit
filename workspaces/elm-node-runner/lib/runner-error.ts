@@ -61,18 +61,6 @@ export type RunnerError =
  * @returns the message, ready for `CliError.print`
  */
 function toCliError(error: RunnerError): CliError {
-  const described = describe(error)
-
-  return { ...described, summary: continuingSentence(described.summary) }
-}
-
-/**
- * Describes a failure, with a summary that may start with a capital letter.
- *
- * @param error - the failure
- * @returns the message
- */
-function describe(error: RunnerError): CliError {
   switch (error.type_) {
     case 'BuildFailed':
       return buildError(error.compileError)

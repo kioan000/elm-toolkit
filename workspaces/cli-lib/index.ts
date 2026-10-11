@@ -25,6 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export { CliError } from './cli-error.ts'
 export { CliSuccess } from './cli-success.ts'
+export { continuingSentence } from './layout.ts'
 export { Maybe } from './maybe.ts'
 export { Result } from './result.ts'
 
@@ -44,35 +45,6 @@ export type PackageManifest = {
   [field: string]: unknown
   name: string
   version: string
-}
-
-// Words that keep their capital letter where a sentence continues.
-const properNouns = new Set(['Elm', 'Main', 'Node'])
-
-/**
- * Lowers the first letter of a text that continues a sentence: a summary after
- * the title of a message, or a message of the system after a colon. Messages
- * follow the Chicago Manual of Style, so a colon does not start a new sentence.
- * A proper noun, such as `Elm`, and a word with more than one capital, such as
- * `TODO` or `TypeScript`, stay as they are.
- *
- * @example
- *
- * Quote the message of an exception after a colon
- * ```TypeScript
- *   `The system reported: ${continuingSentence('No such file or directory')}`
- *   // The system reported: no such file or directory
- * ```
- *
- * @param text - the text that continues the sentence
- * @returns the same text, with a lower first letter when it is an ordinary word
- */
-export function continuingSentence(text: string): string {
-  const [word = ''] = text.split(' ')
-
-  return /^[A-Z][a-z]+\W*$/.test(word) && !properNouns.has(word.replace(/\W/g, ''))
-    ? `${text.charAt(0).toLowerCase()}${text.slice(1)}`
-    : text
 }
 
 /**

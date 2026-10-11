@@ -169,7 +169,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   compiler, which is shown under "Details:" as that program wrote it.
 - `@elm-toolkit/cli-lib`: `continuingSentence`, which lowers the first letter
   of a text that continues a sentence, such as a message of the system after a
-  colon, and keeps proper nouns and words in capitals.
+  colon, and keeps proper nouns and words in capitals. `CliError.print` and
+  `CliSuccess.print` use it for the summary, which continues the sentence of
+  the title.
 - `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
   home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a

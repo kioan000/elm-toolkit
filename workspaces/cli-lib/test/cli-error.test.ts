@@ -156,4 +156,23 @@ describe('CliError', () => {
     ])
     assert.match(lines[lines.indexOf('    Stack trace:') + 1] ?? '', /^ {8}at /)
   })
+
+  it('continues the sentence of the title in lower case, and keeps a proper noun', () => {
+    const printed = mock.method(console, 'info', () => undefined)
+
+    CliError.print('elm make', CliError.create({ summary: 'Could not compile src/Main.elm.' }))
+    CliError.print('elm make', CliError.create({ summary: 'Elm reported a problem.' }))
+
+    const firstLines = printed.mock.calls.map((call) =>
+      call.arguments
+        .join(' ')
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .trim()
+    )
+
+    assert.deepEqual(firstLines, [
+      'ERROR:elm make could not compile src/Main.elm.',
+      'ERROR:elm make Elm reported a problem.',
+    ])
+  })
 })

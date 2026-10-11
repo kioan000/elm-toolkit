@@ -226,7 +226,7 @@ describe('startMain', () => {
       type_: 'MainNotStarted',
     })
 
-    assert.equal(error.summary, 'problem with the flags given to your Elm program on initialization.')
+    assert.equal(error.summary, 'Problem with the flags given to your Elm program on initialization.')
     assert.equal(error.whatHappened.at(-1), 'Expecting a STRING')
     assert.match(error.solution.withDefault(''), /^Without --ts, Main starts without flags\./)
   })

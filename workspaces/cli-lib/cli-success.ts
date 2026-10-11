@@ -9,7 +9,7 @@
  * @packageDocumentation
  */
 
-import { type Section, printSections } from './layout.ts'
+import { type Section, continuingSentence, printSections } from './layout.ts'
 import { Maybe } from './maybe.ts'
 
 /**
@@ -62,7 +62,8 @@ function create(parts: { next?: string; summary: string; whatHappened?: Readonly
 
 /**
  * Prints a success the way every command of the toolkit does. The first line
- * holds the title and the summary, highlighted in green. Below it come the
+ * holds the title, highlighted in green, and the summary, which continues its
+ * sentence and so starts in lower case, as `continuingSentence` makes it. Below it come the
  * sections that have content, each after a blank line: "What happened:" and
  * "Next step:", its label in green.
  *
@@ -71,7 +72,7 @@ function create(parts: { next?: string; summary: string; whatHappened?: Readonly
  * Report a built archive
  * ```TypeScript
  *   CliSuccess.print('archive build', built)
- *   // DONE:archive build Built elm-kernel-patcher/patches.tar.gz from 1 commit.
+ *   // DONE:archive build built elm-kernel-patcher/patches.tar.gz from 1 commit.
  *   //
  *   //     What happened:
  *   //         elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e
@@ -89,7 +90,7 @@ function print(title: string, success: CliSuccess): void {
     { label: 'Next step:', labelColor: '\x1b[32m', lines: success.next.map((text) => [text]).withDefault([]) },
   ]
 
-  console.info(`\n\x1b[42mDONE:${title}\x1b[0m`, success.summary)
+  console.info(`\n\x1b[42mDONE:${title}\x1b[0m`, continuingSentence(success.summary))
   printSections(sections)
 }
 
