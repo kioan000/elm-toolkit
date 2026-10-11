@@ -347,7 +347,7 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  *     case 'Ok':
  *       return console.log('The program compiles.')
  *     case 'Err':
- *       return CliError.print('elm make', CompileError.toCliError(dryCompileResult.error))
+ *       return CliError.print(CompileError.title(dryCompileResult.error), CompileError.toCliError(dryCompileResult.error))
  *   }
  * ```
  *
@@ -377,7 +377,10 @@ export async function dryCompile(sources: Sources, options: CompilerOptions): Pr
  *     case 'Ok':
  *       return compileRunnableProgramResult.value.load().map((elm) => elm.Main?.init())
  *     case 'Err':
- *       return CliError.print('elm make', CompileError.toCliError(compileRunnableProgramResult.error))
+ *       return CliError.print(
+ *         CompileError.title(compileRunnableProgramResult.error),
+ *         CompileError.toCliError(compileRunnableProgramResult.error)
+ *       )
  *   }
  * ```
  *

@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { CliError, continuingSentence } from '@elm-toolkit/cli-lib'
+import { CliError, splitFirstLine } from '@elm-toolkit/cli-lib'
 
 /**
  * One failure of the load of a compiled Elm program.
@@ -19,7 +19,7 @@ import { CliError, continuingSentence } from '@elm-toolkit/cli-lib'
  *     case 'Ok':
  *       return loadResult.value.Main?.init()
  *     case 'Err':
- *       return CliError.print('load', LoadError.toCliError(loadResult.error))
+ *       return CliError.print(LoadError.title(loadResult.error), LoadError.toCliError(loadResult.error))
  *   }
  * ```
  */
@@ -36,8 +36,9 @@ export type LoadError =
  *
  * Print a program whose code threw while it loaded
  * ```TypeScript
- *   CliError.print('load', LoadError.toCliError({ cause: 'boom', original: new Error('boom'), type_: 'ScriptFailed' }))
- *   // ERROR:load The compiled Elm program failed while it loaded.
+ *   const error: LoadError = { cause: 'TODO in module `Main` on line 3', original: undefined, type_: 'ScriptFailed' }
+ *   CliError.print(LoadError.title(error), LoadError.toCliError(error))
+ *   // ERROR:Elm program crashed before it started TODO in module `Main` on line 3
  * ```
  *
  * @param error - the failure
@@ -49,21 +50,44 @@ function toCliError(error: LoadError): CliError {
       return CliError.create({
         solution:
           'Look for a top-level value of the program that fails when it is computed, such as a call of Debug.todo, and run the program again.',
-        summary: 'The compiled Elm program failed while it loaded.',
+        summary: splitFirstLine(error.cause)[0],
         whatHappened: [
           'Elm compiled the program without errors. Loading it computes the top-level values of every module, and one of them threw an error.',
-          `The program reported: ${continuingSentence(error.cause)}`,
+          ...splitFirstLine(error.cause)[1],
         ],
       })
     case 'NoElmObject':
       return CliError.create({
         solution:
           'This is probably a bug of node-elm-compiler. Please report it at https://github.com/kioan000/elm-toolkit/issues, with the message above.',
-        summary: 'The compiled code did not produce the Elm object.',
+        summary: 'The code ran without defining the Elm object.',
         whatHappened: [
           'Elm compiled the program without errors, and its code ran, but it did not define the Elm object that holds the modules.',
         ],
       })
+  }
+}
+
+/**
+ * Says in a few words what went wrong, as the person who runs the tool sees it.
+ * Print it as the highlighted title, with the `CliError` of `toCliError`.
+ *
+ * @example
+ *
+ * Print a program that crashed while it loaded
+ * ```TypeScript
+ *   CliError.print(LoadError.title(error), LoadError.toCliError(error))
+ * ```
+ *
+ * @param error - the load error
+ * @returns a short sentence, such as `Elm program crashed before it started`
+ */
+function title(error: LoadError): string {
+  switch (error.type_) {
+    case 'ScriptFailed':
+      return 'Elm program crashed before it started'
+    case 'NoElmObject':
+      return 'compiled code is not an Elm program'
   }
 }
 
@@ -74,7 +98,7 @@ function toCliError(error: LoadError): CliError {
  *
  * Print a failure
  * ```TypeScript
- *   CliError.print('elm make', LoadError.toCliError(error))
+ *   CliError.print(LoadError.title(error), LoadError.toCliError(error))
  * ```
  */
-export const LoadError = { toCliError }
+export const LoadError = { title, toCliError }

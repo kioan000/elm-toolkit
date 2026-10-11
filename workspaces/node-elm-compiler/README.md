@@ -39,12 +39,16 @@ switch (compileToStringResult.type_) {
     console.log(`${compileToStringResult.value.length} characters of JavaScript`)
     break
   case 'Err':
-    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
+    CliError.print(
+      CompileError.title(compileToStringResult.error),
+      CompileError.toCliError(compileToStringResult.error)
+    )
 }
 ```
 
-`CompileError.toCliError` turns an error into a message for a person, with the
-next step when there is one. A caller can also read `error.type_` and react to
+`CompileError.title` says in a few words what went wrong, and
+`CompileError.toCliError` adds the detail and the next step when there is one.
+`CliError.print` shows the title highlighted, followed by the rest. A caller can also read `error.type_` and react to
 one case, for example show the messages of a failed build in the browser. An
 error that comes from an exception keeps the exception in `original`, with its
 stack and its system code.
@@ -132,7 +136,7 @@ where the old code caught an exception.
 +    await writeFile('public/main.js', compileToStringResult.value)
 +    break
 +  case 'Err':
-+    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
++    CliError.print(CompileError.title(compileToStringResult.error), CompileError.toCliError(compileToStringResult.error))
 +}
 ```
 

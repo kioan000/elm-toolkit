@@ -225,7 +225,7 @@ describe('elm-node-runner', () => {
         const result = run(['src/Main.elm'], { path: emptyDirectory })
 
         assert.equal(result.status, 1)
-        assert.match(result.stdout, /ERROR:Elm compiler not found\S* no program called "elm" is on the PATH\.$/m)
+        assert.match(result.stdout, /ERROR:Elm compiler not found\S* "elm"$/m)
         assert.match(flat(result.stdout), /start elm-node-runner from a script of package\.json/)
         assert.doesNotMatch(result.stdout, /pathToElm/, 'the command has no option to choose the binary')
       } finally {

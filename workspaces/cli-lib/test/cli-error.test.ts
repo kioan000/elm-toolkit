@@ -130,6 +130,13 @@ describe('CliError', () => {
     assert.equal(CliError.toString(CliError.create({ summary: 'No patches at nowhere.' })), 'No patches at nowhere.')
   })
 
+  it('starts the text with the title and the summary, as print shows them, when it receives a title', () => {
+    assert.equal(
+      CliError.toString(CliError.create({ summary: 'Nowhere.' }), 'no patches found'),
+      'no patches found: nowhere.'
+    )
+  })
+
   it('prints the highlighted summary, then what happened, how to fix it and the stack trace', () => {
     const printed = mock.method(console, 'info', () => undefined)
     const error = CliError.withSolution(

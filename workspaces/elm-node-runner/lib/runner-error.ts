@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import { CliError, Maybe, continuingSentence } from '@elm-toolkit/cli-lib'
+import { CliError, Maybe, continuingSentence, splitFirstLine } from '@elm-toolkit/cli-lib'
 import { CompileError, LoadError } from '@elm-toolkit/node-elm-compiler/result-api'
 
 /**
@@ -65,16 +65,7 @@ function toCliError(error: RunnerError): CliError {
     case 'BuildFailed':
       return buildError(error.compileError)
     case 'ProgramNotLoaded':
-      return error.loadError.type_ === 'ScriptFailed'
-        ? {
-            ...LoadError.toCliError(error.loadError),
-            summary: firstLine(error.loadError.cause),
-            whatHappened: [
-              'Loading the program computes the top-level values of every module, and one of them threw an error.',
-              ...rest(error.loadError.cause),
-            ],
-          }
-        : LoadError.toCliError(error.loadError)
+      return LoadError.toCliError(error.loadError)
     case 'NoMain':
       return CliError.create({
         solution: 'Name the entry module Main, or start the module from a launcher with --ts.',
@@ -85,14 +76,20 @@ function toCliError(error: RunnerError): CliError {
       return CliError.create({
         solution:
           'Without --ts, Main starts without flags. Give Main the type Program () model msg, or start it from a launcher with --ts and pass the flags there.',
-        summary: firstLine(error.cause),
-        whatHappened: ['elm-node-runner called the init function of Main, which threw an error.', ...rest(error.cause)],
+        summary: splitFirstLine(error.cause)[0],
+        whatHappened: [
+          'elm-node-runner called the init function of Main, which threw an error.',
+          ...splitFirstLine(error.cause)[1],
+        ],
       })
     case 'LauncherNotLoaded':
       return CliError.create({
         solution: `Check that ${error.launcher} is a module that Node can run. A TypeScript launcher must use only syntax that Node can strip, and it must not be inside node_modules.`,
-        summary: `${error.launcher}: ${continuingSentence(firstLine(error.cause))}`,
-        whatHappened: [`elm-node-runner imports ${error.launcher} to start the program.`, ...rest(error.cause)],
+        summary: `${error.launcher}: ${continuingSentence(splitFirstLine(error.cause)[0])}`,
+        whatHappened: [
+          `elm-node-runner imports ${error.launcher} to start the program.`,
+          ...splitFirstLine(error.cause)[1],
+        ],
       })
     case 'LauncherNotAFunction':
       return CliError.create({
@@ -104,36 +101,13 @@ function toCliError(error: RunnerError): CliError {
     case 'LauncherFailed':
       return CliError.create({
         solution: `Correct the error in ${error.launcher}; the message above comes from it.`,
-        summary: `${error.launcher}: ${continuingSentence(firstLine(error.cause))}`,
+        summary: `${error.launcher}: ${continuingSentence(splitFirstLine(error.cause)[0])}`,
         whatHappened: [
           `elm-node-runner called the default export of ${error.launcher} with the Elm object.`,
-          ...rest(error.cause),
+          ...splitFirstLine(error.cause)[1],
         ],
       })
   }
-}
-
-/**
- * Takes the first line of a message, for the summary of an error.
- *
- * @param cause - the message of an exception
- * @returns its first line
- */
-function firstLine(cause: string): string {
-  return cause.split('\n')[0] ?? cause
-}
-
-/**
- * Takes the lines of a message after the first, so that nothing of it is lost.
- *
- * @param cause - the message of an exception
- * @returns the other lines, without blank ones
- */
-function rest(cause: string): ReadonlyArray<string> {
-  return cause
-    .split('\n')
-    .slice(1)
-    .filter((line) => line.trim() !== '')
 }
 
 /**
@@ -155,11 +129,9 @@ function rest(cause: string): ReadonlyArray<string> {
 function title(error: RunnerError): string {
   switch (error.type_) {
     case 'BuildFailed':
-      return buildTitle(error.compileError)
+      return CompileError.title(error.compileError)
     case 'ProgramNotLoaded':
-      return error.loadError.type_ === 'ScriptFailed'
-        ? 'Elm program crashed before it started'
-        : 'compiled code is not an Elm program'
+      return LoadError.title(error.loadError)
     case 'NoMain':
       return 'no Main module to run'
     case 'MainNotStarted':
@@ -174,68 +146,25 @@ function title(error: RunnerError): string {
 }
 
 /**
- * Says in a few words why the build failed.
- *
- * @param compileError - the error of the build
- * @returns a short sentence
- */
-function buildTitle(compileError: CompileError): string {
-  switch (compileError.type_) {
-    case 'CompileFailed':
-      return 'Elm code does not compile'
-    case 'CompilerNotStarted':
-      return compileError.code.withDefault('') === 'ENOENT' ? 'Elm compiler not found' : 'Elm compiler could not run'
-    case 'CompilerStopped':
-      return 'Elm compiler could not run'
-    case 'UnknownOption':
-    case 'TempFolderNotCreated':
-    case 'OutputNotRead':
-    case 'ModuleNotFound':
-    case 'ProgramNotLoaded':
-    case 'WorkerNotStarted':
-    case 'NoPorts':
-    case 'EntryNotRead':
-    case 'InvalidModule':
-      return 'build failed'
-  }
-}
-
-/**
- * Describes a failed build, with a summary that adds only the detail to the
- * title. A missing compiler gets its own advice, because the command has no
- * option to choose the binary.
+ * Describes a failed build with the message of `node-elm-compiler`. A missing
+ * compiler gets its own advice, because the command has no option to choose
+ * the binary.
  *
  * @param compileError - the error of the build
  * @returns the message
  */
 function buildError(compileError: CompileError): CliError {
   const described = CompileError.toCliError(compileError)
+  const notFound = compileError.type_ === 'CompilerNotStarted' && compileError.code.withDefault('') === 'ENOENT'
 
-  switch (compileError.type_) {
-    case 'CompileFailed':
-      return { ...described, summary: compileError.sources.join(', ') }
-    case 'CompilerNotStarted':
-      return compileError.code.withDefault('') === 'ENOENT'
-        ? {
-            ...described,
-            solution: Maybe.Just(
-              'Install Elm in the project with `npm install --save-dev elm`, and start elm-node-runner from a script of package.json, which puts the elm of the project on the PATH.'
-            ),
-            summary: `No program called "${compileError.pathToElm}" is on the PATH.`,
-          }
-        : described
-    case 'UnknownOption':
-    case 'CompilerStopped':
-    case 'TempFolderNotCreated':
-    case 'OutputNotRead':
-    case 'ModuleNotFound':
-    case 'ProgramNotLoaded':
-    case 'WorkerNotStarted':
-    case 'NoPorts':
-    case 'EntryNotRead':
-    case 'InvalidModule':
-      return described
-  }
+  return notFound
+    ? {
+        ...described,
+        solution: Maybe.Just(
+          'Install Elm in the project with `npm install --save-dev elm`, and start elm-node-runner from a script of package.json, which puts the elm of the project on the PATH.'
+        ),
+      }
+    : described
 }
 
 /**

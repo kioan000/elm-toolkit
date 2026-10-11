@@ -180,7 +180,7 @@ async function dependenciesFor(
           return found.value
         case 'Err':
           // The build still runs, and elm make reports the same problem with its own message.
-          warn(CliError.toString(CompileError.toCliError(found.error)))
+          warn(CliError.toString(CompileError.toCliError(found.error), CompileError.title(found.error)))
 
           return []
       }
@@ -267,7 +267,7 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
     switch (started.type_) {
       case 'Err':
         fs.rmSync(tempDir, { force: true, recursive: true })
-        reject(new Error(CliError.toString(CompileError.toCliError(started.error))))
+        reject(new Error(CliError.toString(CompileError.toCliError(started.error), CompileError.title(started.error))))
 
         return
       case 'Ok': {

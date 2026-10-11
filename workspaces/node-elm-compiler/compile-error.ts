@@ -5,13 +5,14 @@
  * Each case of `CompileError` has a `type_` and the facts that explain it: the
  * option that was not known, the compiler that did not start, the messages of a
  * failed build. A tool can react to one case and report the others. To print an
- * error, turn it into a `CliError` of `@elm-toolkit/cli-lib` with `toCliError`,
- * which adds a summary and, where there is one, the next step.
+ * error, print its `title`, a few words that say what went wrong, with the
+ * `CliError` of `@elm-toolkit/cli-lib` that `toCliError` gives, which adds the
+ * detail and, where there is one, the next step.
  *
  * @packageDocumentation
  */
 
-import { CliError, Maybe, continuingSentence } from '@elm-toolkit/cli-lib'
+import { CliError, Maybe, continuingSentence, splitFirstLine } from '@elm-toolkit/cli-lib'
 
 import { LoadError } from './load-error.ts'
 
@@ -32,7 +33,7 @@ import { LoadError } from './load-error.ts'
  *     case 'CompileFailed':
  *       return showInTheBrowser(error.output)
  *     default:
- *       return CliError.print('elm make', CompileError.toCliError(error))
+ *       return CliError.print(CompileError.title(error), CompileError.toCliError(error))
  *   }
  * ```
  */
@@ -104,19 +105,19 @@ export type CompileError =
   | { readonly file: string; readonly type_: 'InvalidModule' }
 
 /**
- * Turns a compile error into an error for a person. The first line names the
- * problem and the file or option involved, "What happened" explains what the
- * call tried and why it failed, and "How to fix" gives one concrete action.
+ * Describes a compile error for a person. The summary adds only the detail to
+ * the `title`: the file, the option or the compiler involved. "What happened"
+ * explains what the call tried, and "How to fix" gives one concrete action.
  *
  * @example
  *
  * Print a compiler that is not installed
  * ```TypeScript
- *   CliError.print('elm make', CompileError.toCliError(error))
- *   // ERROR:elm make The Elm compiler "elm" was not found.
+ *   CliError.print(CompileError.title(error), CompileError.toCliError(error))
+ *   // ERROR:Elm compiler not found "elm"
  *   //
  *   //     What happened:
- *   //         node-elm-compiler tried to run "elm", and the system found no program with that name or path.
+ *   //         The build tried to run "elm", and the system found no program with that name or path.
  *   //
  *   //     How to fix:
  *   //         Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.
@@ -130,7 +131,7 @@ function toCliError(error: CompileError): CliError {
     case 'UnknownOption':
       return CliError.create({
         solution: error.hint,
-        summary: `Unknown option "${error.option}".`,
+        summary: `"${error.option}"`,
         whatHappened: [
           `The options include "${error.option}", which node-elm-compiler does not know.`,
           'An unknown option stops the call, so that a misspelled flag cannot pass unnoticed.',
@@ -144,13 +145,13 @@ function toCliError(error: CompileError): CliError {
       return CliError.create({
         details: error.output.trim() === '' ? [] : error.output.trim().split('\n'),
         solution: 'Follow the instructions of the Elm compiler above. They point to the exact problem in the code.',
-        summary: `Could not compile ${error.sources.join(', ')}.`,
+        summary: error.sources.join(', '),
         whatHappened: ['The Elm compiler reported an error.'],
       })
     case 'TempFolderNotCreated':
       return CliError.create({
         solution: `Check that ${error.folder} exists, has free space and can be written. To use another folder, set the TMPDIR environment variable.`,
-        summary: 'Could not create a temporary folder for the output of Elm.',
+        summary: error.folder,
         whatHappened: [
           `The build writes the output of Elm into a new folder inside ${error.folder}, and creating that folder failed.`,
           `The system reported: ${continuingSentence(error.cause)}`,
@@ -160,7 +161,7 @@ function toCliError(error: CompileError): CliError {
       return CliError.create({
         solution:
           'This is probably a bug of node-elm-compiler. Please report it at https://github.com/kioan000/elm-toolkit/issues, with the message above.',
-        summary: 'Could not read the JavaScript that Elm wrote.',
+        summary: error.file,
         whatHappened: [
           `Elm compiled without errors and wrote ${error.file}, but reading that file failed.`,
           `The system reported: ${continuingSentence(error.cause)}`,
@@ -181,8 +182,8 @@ function toCliError(error: CompileError): CliError {
           )
           .withDefault(moduleNameFix(error.moduleName, error.suggestions, error.file)),
         summary: exists
-          ? `compileWorker: cannot start the module "${error.moduleName}", because its name has a dot.`
-          : `compileWorker: ${error.file} has no module called "${error.moduleName}".`,
+          ? `"${error.moduleName}" has a dot in its name.`
+          : `"${error.moduleName}" is not in ${error.file}.`,
         whatHappened: [
           `compileWorker compiled ${error.file}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
           ...(exists
@@ -203,16 +204,16 @@ function toCliError(error: CompileError): CliError {
     case 'WorkerNotStarted':
       return CliError.create({
         solution: `Check the flags passed to compileWorker: they must match the type that the init function of ${error.moduleName} expects.`,
-        summary: `compileWorker: the module "${error.moduleName}" failed to start.`,
+        summary: splitFirstLine(error.cause)[0],
         whatHappened: [
           `compileWorker compiled ${error.file} and called the init function of "${error.moduleName}", which threw an error.`,
-          `Elm reported: ${continuingSentence(error.cause)}`,
+          ...splitFirstLine(error.cause)[1],
         ],
       })
     case 'NoPorts':
       return CliError.create({
         solution: `Declare a port in ${error.file}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
-        summary: 'compileWorker: attempt to compile a worker without ports.',
+        summary: `"${error.moduleName}" declares no port.`,
         whatHappened: [
           `compileWorker compiled ${error.file} and started the module "${error.moduleName}", which declares no ports.`,
           'Node exchanges data with a worker only through ports, so a worker without ports cannot receive input or return a result.',
@@ -223,7 +224,7 @@ function toCliError(error: CompileError): CliError {
         solution: error.cause.startsWith('ENOENT')
           ? `Check the path: no file exists at ${error.file}.`
           : `Check that ${error.file} can be read by this user.`,
-        summary: `findAllDependencies: could not read ${error.file}.`,
+        summary: error.file,
         whatHappened: [
           `findAllDependencies starts from ${error.file} to list the files it imports, but reading it failed.`,
           `The system reported: ${continuingSentence(error.cause)}`,
@@ -232,12 +233,72 @@ function toCliError(error: CompileError): CliError {
     case 'InvalidModule':
       return CliError.create({
         solution: `Correct the first line of ${error.file}. Run \`elm make ${error.file}\` to see what Elm expects.`,
-        summary: `findAllDependencies: ${error.file} does not start with a module declaration.`,
+        summary: error.file,
         whatHappened: [
           'The first line of an Elm file declares the module, for example `module Page.Home exposing (view)`.',
           `findAllDependencies reads that line to find the source directory, and the first line of ${error.file} is not a valid declaration.`,
         ],
       })
+  }
+}
+
+/**
+ * Says in a few words what went wrong, as the person who runs the tool sees it.
+ * Print it as the highlighted title, with the `CliError` of `toCliError`, whose
+ * summary adds only the detail.
+ *
+ * @example
+ *
+ * Print a failed build
+ * ```TypeScript
+ *   CliError.print(CompileError.title(error), CompileError.toCliError(error))
+ *   // ERROR:Elm code does not compile src/Main.elm
+ * ```
+ *
+ * @param error - the compile error
+ * @returns a short sentence, such as `Elm compiler not found`
+ */
+function title(error: CompileError): string {
+  switch (error.type_) {
+    case 'UnknownOption':
+      return 'unknown compiler option'
+    case 'CompilerNotStarted':
+      switch (error.code.withDefault('')) {
+        case 'ENOENT':
+          return 'Elm compiler not found'
+        case 'EACCES':
+          return 'Elm compiler not allowed to run'
+
+        default:
+          return 'Elm compiler could not start'
+      }
+    case 'CompilerStopped':
+      switch (error.reason) {
+        case 'timeout':
+          return 'Elm compiler took too long'
+        case 'maxBuffer':
+          return 'Elm compiler wrote too much'
+        case 'signal':
+          return 'Elm compiler was stopped'
+      }
+    case 'CompileFailed':
+      return 'Elm code does not compile'
+    case 'TempFolderNotCreated':
+      return 'temporary folder cannot be created'
+    case 'OutputNotRead':
+      return 'compiled JavaScript cannot be read'
+    case 'ProgramNotLoaded':
+      return LoadError.title(error.loadError)
+    case 'ModuleNotFound':
+      return error.suggestions.includes(error.moduleName) ? 'module cannot start' : 'module not found'
+    case 'WorkerNotStarted':
+      return 'worker failed to start'
+    case 'NoPorts':
+      return 'worker has no ports'
+    case 'EntryNotRead':
+      return 'Elm file cannot be read'
+    case 'InvalidModule':
+      return 'Elm file has no module declaration'
   }
 }
 
@@ -294,7 +355,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
       return CliError.create({
         solution:
           'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
-        summary: `The Elm compiler "${pathToElm}" was not found.`,
+        summary: `"${pathToElm}"`,
         whatHappened: [
           `The build tried to run "${pathToElm}", and the system found no program with that name or path.`,
         ],
@@ -302,7 +363,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
     case 'EACCES':
       return CliError.create({
         solution: `Make it executable with \`chmod +x ${pathToElm}\`, then try again.`,
-        summary: `The Elm compiler "${pathToElm}" is not allowed to run.`,
+        summary: `"${pathToElm}"`,
         whatHappened: [
           `The file "${pathToElm}" exists, but the system refused to run it, because it is not executable.`,
         ],
@@ -311,7 +372,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
     default:
       return CliError.create({
         solution: `Check that "${pathToElm}" is the Elm compiler, and that \`${pathToElm} --version\` works in a terminal.`,
-        summary: `The Elm compiler "${pathToElm}" could not start.`,
+        summary: `"${pathToElm}"`,
         whatHappened: [`The build tried to run "${pathToElm}".`, `The system reported: ${continuingSentence(cause)}`],
       })
   }
@@ -331,7 +392,7 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
     case 'timeout':
       return CliError.create({
         solution: 'Raise processOpts.timeout, or remove it to let the build run until it ends.',
-        summary: `The Elm compiler "${pathToElm}" took longer than the timeout.`,
+        summary: `"${pathToElm}" ran longer than processOpts.timeout.`,
         whatHappened: [
           `node-elm-compiler started "${pathToElm}" with processOpts.timeout, and the system stopped it when that time passed.`,
           'The build did not finish, so it says nothing about the Elm code.',
@@ -340,7 +401,7 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
     case 'maxBuffer':
       return CliError.create({
         solution: 'Raise processOpts.maxBuffer, or set processOpts.stdio so that the messages go to the terminal.',
-        summary: `The Elm compiler "${pathToElm}" wrote more than processOpts.maxBuffer allows.`,
+        summary: `"${pathToElm}" wrote more than processOpts.maxBuffer allows.`,
         whatHappened: [
           `node-elm-compiler captures the messages of "${pathToElm}", and the system stopped it when they went past the limit of processOpts.maxBuffer.`,
           'The build did not finish, so it says nothing about the Elm code.',
@@ -350,10 +411,9 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
       return CliError.create({
         solution:
           'Run the build again. If it stops again, check whether a program or the system stops it, for example when memory runs out.',
-        summary: `The Elm compiler "${pathToElm}" was stopped before it finished.`,
+        summary: `"${pathToElm}" received ${cause}.`,
         whatHappened: [
           `The build started "${pathToElm}", and the process ended because of a signal, not with an exit code.`,
-          `The system reported: ${continuingSentence(cause)}`,
           'The build did not finish, so it says nothing about the Elm code.',
         ],
       })
@@ -367,7 +427,7 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
  *
  * Print any compile error
  * ```TypeScript
- *   CliError.print('elm make', CompileError.toCliError(error))
+ *   CliError.print(CompileError.title(error), CompileError.toCliError(error))
  * ```
  */
-export const CompileError = { toCliError }
+export const CompileError = { title, toCliError }

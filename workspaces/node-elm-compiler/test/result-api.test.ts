@@ -566,10 +566,11 @@ describe('compileWorker', () => {
     assert.equal(error.type_, 'ProgramNotLoaded')
     assert.equal(error.type_ === 'ProgramNotLoaded' ? error.loadError.type_ : undefined, 'ScriptFailed')
     assert.equal(
-      CompileError.toCliError(error).summary,
-      'The compiled Elm program failed while it loaded.',
-      'the message is the one of the load error'
+      CompileError.title(error),
+      'Elm program crashed before it started',
+      'the title is the one of the load error'
     )
+    assert.equal(CompileError.toCliError(error).summary, 'TODO in module `CrashesOnLoad` on line 11')
   })
 
   /**
@@ -695,13 +696,57 @@ describe('LoadError.toCliError', () => {
       type_: 'ScriptFailed',
     })
 
-    assert.equal(error.summary, 'The compiled Elm program failed while it loaded.')
-    assert.match(error.whatHappened.join('\n'), /The program reported: TODO in module/)
+    assert.equal(error.summary, 'TODO in module `CrashesOnLoad` on line 11')
+    assert.match(error.whatHappened.join('\n'), /top-level values of every module/)
     assert.match(error.solution.withDefault(''), /Debug\.todo/)
   })
 
   it('asks for a bug report when the code does not produce the Elm object', () => {
     assert.match(LoadError.toCliError({ type_: 'NoElmObject' }).solution.withDefault(''), /bug of node-elm-compiler/)
+  })
+})
+
+describe('CompileError.title', () => {
+  it('says in a few words what went wrong, for each failure', () => {
+    const errors: ReadonlyArray<CompileError> = [
+      { hint: '', option: 'yes', type_: 'UnknownOption' },
+      { cause: '', code: Maybe.Just('ENOENT'), original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
+      { cause: '', code: Maybe.Just('EACCES'), original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
+      { cause: '', code: Maybe.Nothing, original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
+      { cause: '', original: undefined, pathToElm: 'elm', reason: 'timeout', type_: 'CompilerStopped' },
+      { cause: '', original: undefined, pathToElm: 'elm', reason: 'maxBuffer', type_: 'CompilerStopped' },
+      { cause: '', original: undefined, pathToElm: 'elm', reason: 'signal', type_: 'CompilerStopped' },
+      { exitCode: 1, output: '', sources: ['src/Main.elm'], type_: 'CompileFailed' },
+      { cause: '', folder: '/tmp', original: undefined, type_: 'TempFolderNotCreated' },
+      { cause: '', file: '/tmp/elm.js', original: undefined, type_: 'OutputNotRead' },
+      { file: 'src/Main.elm', loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' },
+      { file: 'src/Main.elm', moduleName: 'Mian', suggestions: ['Main'], type_: 'ModuleNotFound' },
+      { file: 'src/Tools/Echo.elm', moduleName: 'Tools.Echo', suggestions: ['Tools.Echo'], type_: 'ModuleNotFound' },
+      { cause: '', file: 'src/Main.elm', moduleName: 'Main', original: undefined, type_: 'WorkerNotStarted' },
+      { file: 'src/Main.elm', moduleName: 'Main', type_: 'NoPorts' },
+      { cause: '', file: 'src/Main.elm', original: undefined, type_: 'EntryNotRead' },
+      { file: 'src/Main.elm', type_: 'InvalidModule' },
+    ]
+
+    assert.deepEqual(errors.map(CompileError.title), [
+      'unknown compiler option',
+      'Elm compiler not found',
+      'Elm compiler not allowed to run',
+      'Elm compiler could not start',
+      'Elm compiler took too long',
+      'Elm compiler wrote too much',
+      'Elm compiler was stopped',
+      'Elm code does not compile',
+      'temporary folder cannot be created',
+      'compiled JavaScript cannot be read',
+      'compiled code is not an Elm program',
+      'module not found',
+      'module cannot start',
+      'worker failed to start',
+      'worker has no ports',
+      'Elm file cannot be read',
+      'Elm file has no module declaration',
+    ])
   })
 })
 
@@ -715,7 +760,7 @@ describe('CompileError.toCliError', () => {
       type_: 'WorkerNotStarted',
     })
 
-    assert.equal(error.summary, 'compileWorker: the module "Doubler" failed to start.')
+    assert.equal(error.summary, 'Problem with the flags given to your Elm program on initialization.')
     assert.match(error.solution.withDefault(''), /flags passed to compileWorker/)
   })
 
@@ -739,7 +784,7 @@ describe('CompileError.toCliError', () => {
       type_: 'CompilerNotStarted',
     })
 
-    assert.equal(error.summary, 'The Elm compiler "elm" was not found.')
+    assert.equal(error.summary, '"elm"')
     assert.match(error.solution.withDefault(''), /npm install --save-dev elm/)
   })
 
@@ -752,7 +797,7 @@ describe('CompileError.toCliError', () => {
       type_: 'CompilerStopped',
     })
 
-    assert.equal(error.summary, 'The Elm compiler "elm" took longer than the timeout.')
+    assert.equal(error.summary, '"elm" ran longer than processOpts.timeout.')
     assert.match(error.solution.withDefault(''), /Raise processOpts\.timeout/)
   })
 
@@ -777,7 +822,7 @@ describe('CompileError.toCliError', () => {
       type_: 'CompilerStopped',
     })
 
-    assert.equal(error.summary, 'The Elm compiler "elm" was stopped before it finished.')
+    assert.equal(error.summary, '"elm" received SIGKILL.')
     assert.match(error.whatHappened.join('\n'), /says nothing about the Elm code/)
   })
 
@@ -789,7 +834,7 @@ describe('CompileError.toCliError', () => {
       type_: 'CompileFailed',
     })
 
-    assert.equal(error.summary, 'Could not compile src/Broken.elm.')
+    assert.equal(error.summary, 'src/Broken.elm')
     assert.deepEqual(error.whatHappened, ['The Elm compiler reported an error.'])
     assert.deepEqual(error.details, ['-- TYPE MISMATCH --', '', 'line'])
     assert.match(error.solution.withDefault(''), /Follow the instructions of the Elm compiler/)
@@ -813,7 +858,7 @@ describe('CompileError.toCliError', () => {
       type_: 'ModuleNotFound',
     })
 
-    assert.equal(error.summary, 'compileWorker: src/Doubler.elm has no module called "Dubler".')
+    assert.equal(error.summary, '"Dubler" is not in src/Doubler.elm.')
     assert.equal(error.solution.withDefault(''), 'Change moduleName from "Dubler" to "Doubler".')
   })
 
@@ -825,7 +870,7 @@ describe('CompileError.toCliError', () => {
       type_: 'ModuleNotFound',
     })
 
-    assert.equal(error.summary, 'compileWorker: cannot start the module "Tools.Echo", because its name has a dot.')
+    assert.equal(error.summary, '"Tools.Echo" has a dot in its name.')
     assert.equal(
       error.solution.withDefault(''),
       'compileWorker starts only a module whose name has no dot. Give the entry module a name without a dot, for example Main in a project of its own. Or load the program with compileRunnableProgram, and start Elm.Tools.Echo yourself.'
@@ -844,7 +889,7 @@ describe('CompileError.toCliError', () => {
       type_: 'ModuleNotFound',
     })
 
-    assert.equal(error.summary, 'compileWorker: src/Tools/Echo.elm has no module called "Echo".')
+    assert.equal(error.summary, '"Echo" is not in src/Tools/Echo.elm.')
     assert.match(
       error.solution.withDefault(''),
       /^compileWorker starts only a module whose name has no dot\..*Elm\.Tools\.Echo/
@@ -854,7 +899,7 @@ describe('CompileError.toCliError', () => {
   it('explains why a worker without ports is an error, and where to learn about ports', () => {
     const error = CompileError.toCliError({ file: 'src/NoPorts.elm', moduleName: 'NoPorts', type_: 'NoPorts' })
 
-    assert.equal(error.summary, 'compileWorker: attempt to compile a worker without ports.')
+    assert.equal(error.summary, '"NoPorts" declares no port.')
     assert.match(error.whatHappened.join('\n'), /only through ports/)
     assert.match(error.solution.withDefault(''), /guide\.elm-lang\.org\/interop\/ports/)
   })

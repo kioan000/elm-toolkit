@@ -25,7 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export { CliError } from './cli-error.ts'
 export { CliSuccess } from './cli-success.ts'
-export { continuingSentence } from './layout.ts'
+export { continuingSentence, splitFirstLine } from './layout.ts'
 export { Maybe } from './maybe.ts'
 export { Result } from './result.ts'
 

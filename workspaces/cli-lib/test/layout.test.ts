@@ -8,7 +8,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CliError, continuingSentence } from '../index.ts'
+import { CliError, continuingSentence, splitFirstLine } from '../index.ts'
 import { wrap } from '../layout.ts'
 
 describe('wrap', () => {
@@ -117,5 +117,18 @@ describe('continuingSentence', () => {
       'src/Main.elm',
       '--log-info is deprecated',
     ])
+  })
+})
+
+describe('splitFirstLine', () => {
+  it('returns the first line, and the other lines without blank ones', () => {
+    assert.deepEqual(splitFirstLine('Problem with the flags.\n\nExpecting a STRING'), [
+      'Problem with the flags.',
+      ['Expecting a STRING'],
+    ])
+  })
+
+  it('returns no other lines for a message of one line', () => {
+    assert.deepEqual(splitFirstLine('the launcher broke'), ['the launcher broke', []])
   })
 })

@@ -4,7 +4,8 @@
  * line that is too long continues on the next line, with the same indentation.
  *
  * The module is internal to `cli-lib`. The index exports only
- * `continuingSentence`, which the commands also use for their own text.
+ * `continuingSentence` and `splitFirstLine`, which the commands also use for
+ * their own text.
  *
  * @packageDocumentation
  */
@@ -133,4 +134,26 @@ export function continuingSentence(text: string): string {
   return /^[A-Z][a-z]+\W*$/.test(word) && !properNouns.has(word.replace(/\W/g, ''))
     ? `${text.charAt(0).toLowerCase()}${text.slice(1)}`
     : text
+}
+
+/**
+ * Splits a message in its first line and the other ones, without blank lines.
+ * An error shows the first line as its summary, and the others below it, so
+ * that nothing of the message is lost.
+ *
+ * @example
+ *
+ * Split the message of an exception
+ * ```TypeScript
+ *   splitFirstLine('Problem with the flags.\n\nExpecting a STRING')
+ *   // ['Problem with the flags.', ['Expecting a STRING']]
+ * ```
+ *
+ * @param message - the message, such as the one of an exception
+ * @returns the first line, and the other lines that are not blank
+ */
+export function splitFirstLine(message: string): readonly [string, ReadonlyArray<string>] {
+  const [first = '', ...others] = message.split('\n')
+
+  return [first, others.filter((line) => line.trim() !== '')]
 }

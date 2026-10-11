@@ -171,7 +171,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   of a text that continues a sentence, such as a message of the system after a
   colon, and keeps proper nouns and words in capitals. `CliError.print` and
   `CliSuccess.print` use it for the summary, which continues the sentence of
-  the title.
+  the title. `CliError.toString` takes the title too, for a text that has to
+  start with it, and `splitFirstLine` splits a message into the line of a
+  summary and the lines below it.
 - `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
   home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a
@@ -196,8 +198,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 - `@elm-toolkit/node-elm-compiler`: the `./result-api` subpath. It has the
   functions of the root, with the same names and options, but each one returns
   a `Result` with a `CompileError` instead of throwing.
-  `CompileError.toCliError` turns that error into a message for a person. An
-  error that comes from an exception keeps it in `original`.
+  `CompileError.title` says in a few words what went wrong, and
+  `CompileError.toCliError` adds the detail for a person. An error that comes
+  from an exception keeps it in `original`.
 - `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
   that a program compiles, and writes no output.
 - `@elm-toolkit/node-elm-compiler`: `compileRunnableProgram`, in
