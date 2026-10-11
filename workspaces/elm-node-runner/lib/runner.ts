@@ -2,10 +2,10 @@
  * Runs Elm programs inside the current Node process.
  *
  * A run has two steps. `compileProgram` compiles the Elm files and loads them,
- * which gives the `Elm` object. Then `startMain` starts `Main` with the `log`
- * and `eval` ports, or a launcher receives the `Elm` object and starts what it
- * wants. `runElm` does both steps, as the command does. A failure is a
- * `RunnerError`.
+ * which gives the `Elm` object. Then `startProgram` starts it: `startMain`
+ * starts `Main` with the `log` and `eval` ports, or a launcher receives the
+ * `Elm` object and starts what it wants. `runElm` does both steps. A failure is
+ * a `RunnerError`.
  *
  * @packageDocumentation
  */
@@ -172,27 +172,45 @@ export function startMain(Elm: ElmNamespace): Result<RunnerError, ElmApp> {
  *   const runElmResult = await runElm({ elmFiles: ['src/Main.elm'], launcher: 'src/main.ts' })
  *
  *   if (runElmResult.type_ === 'Err') {
- *     CliError.print('elm-node-runner', RunnerError.toCliError(runElmResult.error))
+ *     CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
  *   }
  * ```
  *
  * @param options - the files, the launcher and the build settings
- * @returns `Ok` once the program has started, or `Err` with the step that failed
+ * @returns `Ok` once the program has started, or `Err` with what went wrong
  */
 export async function runElm(options: RunOptions): Promise<Result<RunnerError, void>> {
   const compiled = await compileProgram(options.elmFiles, options)
 
-  if (compiled.type_ === 'Err') {
-    return Result.Err(compiled.error)
-  }
+  return compiled.type_ === 'Err' ? Result.Err(compiled.error) : await startProgram(compiled.value, options.launcher)
+}
 
-  const launcher = options.launcher
-
-  if (launcher === undefined) {
-    return startMain(compiled.value).map(() => undefined)
-  }
-
-  return await startLauncher(launcher, compiled.value)
+/**
+ * Starts a compiled program: with the launcher when there is one, otherwise
+ * with `startMain`. Use it to do something between the build and the start,
+ * as the command does when it reports the build.
+ *
+ * @example
+ *
+ * Report the build, then start the program
+ * ```TypeScript
+ *   const compileProgramResult = await compileProgram(['src/Main.elm'])
+ *
+ *   if (compileProgramResult.type_ === 'Ok') {
+ *     console.log('Built.')
+ *     await startProgram(compileProgramResult.value, 'src/main.ts')
+ *   }
+ * ```
+ *
+ * @param Elm - the object that `compileProgram` returned
+ * @param launcher - the path of the launcher, or `undefined` to start `Main`
+ * @returns `Ok` once the program has started, or `Err` with what went wrong
+ */
+export async function startProgram(
+  Elm: ElmNamespace,
+  launcher: string | undefined
+): Promise<Result<RunnerError, void>> {
+  return launcher === undefined ? startMain(Elm).map(() => undefined) : await startLauncher(launcher, Elm)
 }
 
 /**

@@ -2,8 +2,9 @@
  * Checks the command as a user runs it: in its own process, on
  * `fixtures/project`, with the pinned Elm first on the `PATH`.
  *
- * A build prints nothing of its own. A failure prints one error on standard
- * output, with the problems of Elm under "Details". The checks read each stream
+ * A build that succeeds prints one report, before the program prints. A failure
+ * prints one error, with a short title that says what went wrong, and the problems of Elm
+ * under "Details". Both go to standard output. The checks read each stream
  * on its own, so a change of stream fails a test. A long line of an error wraps,
  * so the checks read errors with `flat`.
  *
@@ -75,10 +76,20 @@ describe('elm-node-runner', () => {
     assert.match(result.stdout, /^eval can reach function$/m, 'the evaluated code should see the global app')
   })
 
-  it('prints nothing of the build when it succeeds, only what the program prints', () => {
-    const { stdout } = run(['src/Main.elm'])
+  it('reports the build that succeeds, before what the program prints', () => {
+    const lines = flat(run(['src/Main.elm']).stdout)
 
-    assert.deepEqual(stdout.trim().split('\n'), ['eval can reach function', 'Hello from Main'])
+    assert.match(
+      lines,
+      /^ DONE:compiled successfully\S* src\/Main\.elm What happened: Main starts now\. What the program prints follows\. eval can reach function Hello from Main $/
+    )
+  })
+
+  it('names the launcher in the report of the build', () => {
+    assert.match(
+      flat(run(['--ts', 'launcher.ts', 'src/Main.elm', 'src/Greeter.elm']).stdout),
+      /launcher\.ts starts the program now\./
+    )
   })
 
   it('gives the launcher the Elm object, with every compiled module', () => {
@@ -94,9 +105,11 @@ describe('elm-node-runner', () => {
     assert.doesNotMatch(run(['--optimize', 'src/Main.elm']).output, /Compiled in DEV mode/)
   })
 
-  it('prints the compiler command and the messages of Elm with --log-info', () => {
-    const { stdout } = run(['--log-info', 'src/Main.elm'])
+  it('warns that --log-info is deprecated, and still prints the compiler command and the messages of Elm', () => {
+    const { status, stdout } = run(['--log-info', 'src/Main.elm'])
 
+    assert.equal(status, 0)
+    assert.match(stdout, /WARNING:deprecated option\S* --log-info will be removed in a later release\./)
     assert.match(stdout, /^Running \S*elm make src\/Main\.elm/m)
     assert.match(stdout, /^Success!/m)
   })
@@ -135,7 +148,7 @@ describe('elm-node-runner', () => {
       const result = run(['src/Broken.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.stdout, /ERROR:elm-node-runner\S* Could not compile src\/Broken\.elm\.$/m)
+      assert.match(result.stdout, /ERROR:Elm code does not compile\S* src\/Broken\.elm$/m)
       assert.match(result.stdout, /Details:\S*\n\s+-- TYPE MISMATCH/, 'the problems of Elm are part of the error')
       assert.doesNotMatch(result.stderr, /TYPE MISMATCH/, 'nothing of the build goes to standard error')
     })
@@ -144,8 +157,7 @@ describe('elm-node-runner', () => {
       const result = run(['src/Greeter.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.stdout, /ERROR:elm-node-runner\S* No compiled module is called Main\.$/m)
-      assert.match(flat(result.stdout), /the build exports Greeter\./)
+      assert.match(result.stdout, /ERROR:no Main module to run\S* the build has only Greeter\.$/m)
     })
 
     it('when the launcher has no function as its default export', () => {
@@ -154,7 +166,7 @@ describe('elm-node-runner', () => {
       assert.equal(result.status, 1)
       assert.match(
         result.stdout,
-        /ERROR:elm-node-runner\S* not-a-function\.ts has no function as its default export\.$/m
+        /ERROR:launcher exports no function\S* check the default export of not-a-function\.ts\.$/m
       )
     })
 
@@ -162,23 +174,27 @@ describe('elm-node-runner', () => {
       const result = run(['--ts', 'cannot-load.ts', 'src/Main.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.stdout, /ERROR:elm-node-runner\S* Could not load the launcher cannot-load\.ts\.$/m)
-      assert.match(flat(result.stdout), /Node reported: TypeScript enum is not supported/)
+      assert.match(
+        result.stdout,
+        /ERROR:launcher cannot be loaded\S* cannot-load\.ts: TypeScript enum is not supported/m
+      )
     })
 
     it('when the launcher throws', () => {
       const result = run(['--ts', 'throws.ts', 'src/Main.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.stdout, /ERROR:elm-node-runner\S* The launcher throws\.ts failed\.$/m)
-      assert.match(flat(result.stdout), /The launcher reported: the launcher broke/)
+      assert.match(result.stdout, /ERROR:launcher threw an error\S* throws\.ts: the launcher broke$/m)
     })
 
     it('when the compiled program throws while it loads', () => {
       const result = run(['src/CrashesOnLoad.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.stdout, /ERROR:elm-node-runner\S* The compiled Elm program failed while it loaded\.$/m)
+      assert.match(
+        result.stdout,
+        /ERROR:Elm program crashed before it started\S* TODO in module `CrashesOnLoad` on line 11$/m
+      )
     })
 
     it('when the launcher does not exist', () => {
@@ -209,7 +225,7 @@ describe('elm-node-runner', () => {
         const result = run(['src/Main.elm'], { path: emptyDirectory })
 
         assert.equal(result.status, 1)
-        assert.match(result.stdout, /ERROR:elm-node-runner\S* The Elm compiler "elm" was not found\.$/m)
+        assert.match(result.stdout, /ERROR:Elm compiler not found\S* no program called "elm" is on the PATH\.$/m)
         assert.match(flat(result.stdout), /start elm-node-runner from a script of package\.json/)
         assert.doesNotMatch(result.stdout, /pathToElm/, 'the command has no option to choose the binary')
       } finally {

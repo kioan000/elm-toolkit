@@ -15,10 +15,10 @@
 import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 
-import { CliError, isEntryPoint, readPackageJson } from '@elm-toolkit/cli-lib'
+import { CliError, CliSuccess, isEntryPoint, prettyWarn, readPackageJson } from '@elm-toolkit/cli-lib'
 
 import { exampleElm, exampleLauncher } from './lib/examples.ts'
-import { RunnerError, runElm } from './lib/runner.ts'
+import { RunnerError, compileProgram, startProgram } from './lib/runner.ts'
 
 /**
  * The help text that `--help` prints, and that wrong usage prints as well.
@@ -30,7 +30,7 @@ import { RunnerError, runElm } from './lib/runner.ts'
  *   console.log(`Unknown project.\n\n${usage}`)
  * ```
  */
-export const usage = `elm-node-runner [--ts launcher.ts] [--optimize] [--log-info] Main.elm [More.elm ...]
+export const usage = `elm-node-runner [--ts launcher.ts] [--optimize] Main.elm [More.elm ...]
 
 Compiles the Elm files and runs the program in Node.
 
@@ -40,7 +40,7 @@ object and starts the program itself.
 
   --ts <file>     a TypeScript or JavaScript launcher
   --optimize      build with elm make --optimize
-  --log-info      print the compiler command, and the messages of Elm
+  --log-info      deprecated: an error already shows the messages of Elm
   --example-elm   print a starter Main.elm
   --example-ts    print a starter launcher for it
   --version       print the version
@@ -124,21 +124,51 @@ export async function main(args: string[]): Promise<number> {
     return 1
   }
 
-  const runElmResult = await runElm({
-    elmFiles,
-    launcher: values.ts,
+  if (values['log-info']) {
+    prettyWarn('deprecated option', '--log-info will be removed in a later release.')
+    console.info('    An error already shows the messages of Elm, so the option adds only the compiler command.')
+  }
+
+  const compileProgramResult = await compileProgram(elmFiles, {
     optimize: values.optimize,
     verbose: values['log-info'],
   })
 
-  switch (runElmResult.type_) {
-    case 'Ok':
-      return 0
-    case 'Err':
-      CliError.print('elm-node-runner', RunnerError.toCliError(runElmResult.error))
-
-      return 1
+  if (compileProgramResult.type_ === 'Err') {
+    return failed(compileProgramResult.error)
   }
+
+  const launcher = values.ts
+
+  CliSuccess.print(
+    'compiled successfully',
+    CliSuccess.create({
+      summary: elmFiles.join(', '),
+      whatHappened: [
+        launcher === undefined
+          ? 'Main starts now. What the program prints follows.'
+          : `${launcher} starts the program now. What the program prints follows.`,
+      ],
+    })
+  )
+  // A blank line keeps the output of the program apart from the report.
+  console.info()
+
+  const startProgramResult = await startProgram(compileProgramResult.value, launcher)
+
+  return startProgramResult.type_ === 'Err' ? failed(startProgramResult.error) : 0
+}
+
+/**
+ * Prints a failed run, with a title that says what went wrong.
+ *
+ * @param error - the failure
+ * @returns the exit code of a failure
+ */
+function failed(error: RunnerError): number {
+  CliError.print(RunnerError.title(error), RunnerError.toCliError(error))
+
+  return 1
 }
 
 if (isEntryPoint(import.meta.url)) {

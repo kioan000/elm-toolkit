@@ -16,9 +16,9 @@ import path from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { type Result } from '@elm-toolkit/cli-lib'
+import { Maybe, type Result } from '@elm-toolkit/cli-lib'
 
-import { type ElmNamespace, RunnerError, compileProgram, runElm, startMain } from '../lib/runner.ts'
+import { type ElmNamespace, RunnerError, compileProgram, runElm, startMain, startProgram } from '../lib/runner.ts'
 import { findElmBinary } from './elm-binary.ts'
 
 const project = path.join(import.meta.dirname, 'fixtures', 'project')
@@ -136,7 +136,7 @@ describe('compileProgram', () => {
     const error = errorOf(await compileProgram(['src/CrashesOnLoad.elm']))
 
     assert.equal(error.type_, 'ProgramNotLoaded')
-    assert.equal(RunnerError.toCliError(error).summary, 'The compiled Elm program failed while it loaded.')
+    assert.equal(RunnerError.toCliError(error).summary, 'TODO in module `CrashesOnLoad` on line 11')
   })
 
   it('prints the compiler command and the messages of Elm with verbose, and nothing without it', async (t) => {
@@ -219,15 +219,77 @@ describe('startMain', () => {
     })
   })
 
-  it('explains MainNotStarted with the advice about flags', () => {
+  it('explains MainNotStarted with the first line of the message, and the advice about flags', () => {
     const error = RunnerError.toCliError({
-      cause: 'Problem with the flags',
+      cause: 'Problem with the flags given to your Elm program on initialization.\nExpecting a STRING',
       original: undefined,
       type_: 'MainNotStarted',
     })
 
-    assert.equal(error.summary, 'The module Main failed to start.')
+    assert.equal(error.summary, 'problem with the flags given to your Elm program on initialization.')
+    assert.equal(error.whatHappened.at(-1), 'Expecting a STRING')
     assert.match(error.solution.withDefault(''), /^Without --ts, Main starts without flags\./)
+  })
+})
+
+describe('startProgram', () => {
+  it('starts Main without a launcher', async () => {
+    let started = false
+    const Elm = {
+      Main: {
+        init: () => {
+          started = true
+
+          return {}
+        },
+      },
+    } as unknown as ElmNamespace
+
+    valueOf(await startProgram(Elm, undefined))
+    assert.ok(started)
+  })
+
+  it('gives the Elm object to the launcher when there is one', async () => {
+    assert.equal(errorOf(await startProgram({}, 'not-a-function.ts')).type_, 'LauncherNotAFunction')
+  })
+})
+
+describe('RunnerError.title', () => {
+  it('says in a few words what went wrong, for each failure', () => {
+    const titles = (
+      [
+        { compileError: { exitCode: 1, output: '', sources: [], type_: 'CompileFailed' }, type_: 'BuildFailed' },
+        {
+          compileError: {
+            cause: '',
+            code: Maybe.Just('ENOENT'),
+            original: undefined,
+            pathToElm: 'elm',
+            type_: 'CompilerNotStarted',
+          },
+          type_: 'BuildFailed',
+        },
+        { loadError: { cause: '', original: undefined, type_: 'ScriptFailed' }, type_: 'ProgramNotLoaded' },
+        { loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' },
+        { modules: [], type_: 'NoMain' },
+        { cause: '', original: undefined, type_: 'MainNotStarted' },
+        { cause: '', launcher: 'main.ts', original: undefined, type_: 'LauncherNotLoaded' },
+        { launcher: 'main.ts', type_: 'LauncherNotAFunction' },
+        { cause: '', launcher: 'main.ts', original: undefined, type_: 'LauncherFailed' },
+      ] as ReadonlyArray<RunnerError>
+    ).map(RunnerError.title)
+
+    assert.deepEqual(titles, [
+      'Elm code does not compile',
+      'Elm compiler not found',
+      'Elm program crashed before it started',
+      'compiled code is not an Elm program',
+      'no Main module to run',
+      'Main failed to start',
+      'launcher cannot be loaded',
+      'launcher exports no function',
+      'launcher threw an error',
+    ])
   })
 })
 
@@ -256,6 +318,17 @@ describe('runElm', () => {
 
     assert.equal(error.type_, 'LauncherNotLoaded')
     assert.match(error.type_ === 'LauncherNotLoaded' ? error.cause : '', /enum is not supported/)
+  })
+
+  it('continues the summary of a launcher that throws in lower case, as after any colon', () => {
+    const error = RunnerError.toCliError({
+      cause: 'Cannot read properties of undefined',
+      launcher: 'src/main.ts',
+      original: undefined,
+      type_: 'LauncherFailed',
+    })
+
+    assert.equal(error.summary, 'src/main.ts: cannot read properties of undefined')
   })
 
   it('returns LauncherFailed for a launcher that throws', async () => {

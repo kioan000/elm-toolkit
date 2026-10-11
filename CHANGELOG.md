@@ -13,8 +13,10 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 - **The functions of `./runner` return a `Result`**
 
   `@elm-toolkit/elm-node-runner`: `compileProgram`, `startMain` and `runElm` no
-  longer throw or reject. Each one returns a `Result` with a `RunnerError`,
-  which `RunnerError.toCliError` turns into a message for a person. In
+  longer throw or reject. Each one returns a `Result` with a `RunnerError`.
+  `RunnerError.title` says in a few words what went wrong, and
+  `RunnerError.toCliError` describes the failure for a person. `startProgram`
+  starts a compiled program, with a launcher or with `Main`. In
   `ElmNamespace`, a module that the build does not have is `undefined`.
 
   **How to fix:** read the `Result` where the old code caught an exception.
@@ -28,7 +30,7 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   +const runElmResult = await runElm({ elmFiles: ['src/Main.elm'] })
   +
   +if (runElmResult.type_ === 'Err') {
-  +  CliError.print('elm-node-runner', RunnerError.toCliError(runElmResult.error))
+  +  CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
   +}
   ```
 
@@ -234,11 +236,12 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   - `compileWorker` with a module whose name has a dot, such as `Tools.Echo`,
     suggests its full name instead of `Tools`.
 - `@elm-toolkit/elm-node-runner`: the command no longer shows the messages of
-  Elm while it builds. When something fails, it prints one error in the layout
-  of the toolkit, with the problems of Elm under "Details:", and `--log-info`
-  prints the messages of Elm after the build. It also reports a launcher that
-  cannot be imported or that throws, a program that fails while it loads, and a
-  `Main` whose `init` throws, where it used to print the bare exception.
+  Elm while it builds. A build that succeeds is reported before the program
+  starts. A failure prints one error in the layout of the toolkit, with a short
+  title that says what went wrong, such as `Elm code does not compile`, and the
+  problems of Elm under "Details:". It also reports a launcher that cannot be
+  imported or that throws, a program that fails while it loads, and a `Main`
+  whose `init` throws, where it used to print the bare exception.
 - `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
   new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
   imports of a file, webpack shows a warning in the layout of the toolkit,
@@ -257,6 +260,13 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   -import { compileToString } from '@elm-toolkit/node-elm-compiler'
   +import { compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
   ```
+
+- `@elm-toolkit/elm-node-runner`: the `--log-info` option. A failed build
+  already shows the messages of Elm in its error, so the option adds only the
+  compiler command. It still works, prints a warning, and a later release will
+  remove it.
+
+  **How to fix:** remove `--log-info` from the scripts that start the runner.
 
 ### Fixed
 

@@ -99,21 +99,24 @@ Node can strip, so no `enum`, and it lives in your project, not in
 
 ## Options and errors
 
-`--optimize` builds with `elm make --optimize`. `--log-info` prints the compiler
-command and the messages of Elm. `--help` lists every option.
+`--optimize` builds with `elm make --optimize`. `--help` lists every option.
+`--log-info` is deprecated: an error already shows the messages of Elm.
 
 Elm runs in the current directory, so start the runner from the Elm project or
 from a folder below it. The messages of Elm stay hidden while it builds. When
-something fails, the command prints one error that says what happened and how
-to fix it, with the problems of Elm under "Details", and exits with code one.
+the build succeeds, the command reports it before the program starts. When
+something fails, the command prints one error and exits with code one. The
+highlighted title of the error says in a few words what went wrong, such as
+`Elm code does not compile`. The rest says what happened and how to fix it, with
+the problems of Elm under "Details".
 
 ## Using the runner from code
 
 `@elm-toolkit/elm-node-runner/runner` has the steps of the command as functions:
-`compileProgram` compiles and loads the program, `startMain` starts `Main` with
-the `log` and `eval` ports, and `runElm` does what the command does. Each one
-returns a `Result`, with a `RunnerError` that `RunnerError.toCliError` turns
-into a message for a person.
+`compileProgram` compiles and loads the program, `startProgram` starts it with
+a launcher or with `Main`, and `runElm` does both. Each one returns a `Result`,
+with a `RunnerError`. `RunnerError.title` says in a few words what went wrong,
+and `RunnerError.toCliError` describes the failure for a person.
 
 ```ts
 import { CliError } from '@elm-toolkit/cli-lib'
@@ -122,7 +125,7 @@ import { RunnerError, runElm } from '@elm-toolkit/elm-node-runner/runner'
 const runElmResult = await runElm({ elmFiles: ['src/Main.elm'], launcher: 'generate.ts' })
 
 if (runElmResult.type_ === 'Err') {
-  CliError.print('elm-node-runner', RunnerError.toCliError(runElmResult.error))
+  CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
 }
 ```
 
