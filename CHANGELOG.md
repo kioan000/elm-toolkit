@@ -165,6 +165,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   `print` functions show it the way every command of the toolkit does. A
   `CliError` can also carry the report of another program, such as a
   compiler, which is shown under "Details:" as that program wrote it.
+- `@elm-toolkit/cli-lib`: `continuingSentence`, which lowers the first letter
+  of a text that continues a sentence, such as a message of the system after a
+  colon, and keeps proper nouns and words in capitals.
 - `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
   home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a

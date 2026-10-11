@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { CliError } from '@elm-toolkit/cli-lib'
+import { CliError, continuingSentence } from '@elm-toolkit/cli-lib'
 
 /**
  * One failure of the load of a compiled Elm program.
@@ -19,7 +19,7 @@ import { CliError } from '@elm-toolkit/cli-lib'
  *     case 'Ok':
  *       return loadResult.value.Main?.init()
  *     case 'Err':
- *       return CliError.print('elm-node-runner', LoadError.toCliError(loadResult.error))
+ *       return CliError.print('load', LoadError.toCliError(loadResult.error))
  *   }
  * ```
  */
@@ -36,8 +36,8 @@ export type LoadError =
  *
  * Print a program whose code threw while it loaded
  * ```TypeScript
- *   CliError.print('elm-node-runner', LoadError.toCliError({ cause: 'boom', original: new Error('boom'), type_: 'ScriptFailed' }))
- *   // ERROR:elm-node-runner The compiled Elm program failed while it loaded.
+ *   CliError.print('load', LoadError.toCliError({ cause: 'boom', original: new Error('boom'), type_: 'ScriptFailed' }))
+ *   // ERROR:load The compiled Elm program failed while it loaded.
  * ```
  *
  * @param error - the failure
@@ -52,7 +52,7 @@ function toCliError(error: LoadError): CliError {
         summary: 'The compiled Elm program failed while it loaded.',
         whatHappened: [
           'Elm compiled the program without errors. Loading it computes the top-level values of every module, and one of them threw an error.',
-          `The program reported: ${error.cause}`,
+          `The program reported: ${continuingSentence(error.cause)}`,
         ],
       })
     case 'NoElmObject':

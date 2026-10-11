@@ -156,10 +156,10 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
   it('exposes the shared library', () => {
     const exported = runInConsumer(`
       const library = await import('@elm-toolkit/cli-lib')
-      console.log(typeof library.isEntryPoint, typeof library.readPackageJson)
+      console.log(typeof library.isEntryPoint, typeof library.readPackageJson, typeof library.continuingSentence)
     `)
 
-    assert.equal(exported, 'function function')
+    assert.equal(exported, 'function function function')
   })
 
   it('exposes the compiler wrapper', () => {
@@ -214,7 +214,7 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
       console.log(typeof runner.main, Object.keys(library).sort().join(','))
     `)
 
-    assert.equal(exported, 'function RunnerError,compileProgram,runElm,startMain')
+    assert.equal(exported, 'function RunnerError,compileProgram,runElm,startMain,startProgram')
   })
 
   it('ships the hot reload runtime that the loader reads', () => {

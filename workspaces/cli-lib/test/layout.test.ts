@@ -1,6 +1,6 @@
 /**
  * Checks how the shared layout splits a line that is too long for the
- * terminal.
+ * terminal, and how a sentence continues after a title or a colon.
  *
  * @packageDocumentation
  */
@@ -8,7 +8,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CliError } from '../index.ts'
+import { CliError, continuingSentence } from '../index.ts'
 import { wrap } from '../layout.ts'
 
 describe('wrap', () => {
@@ -92,5 +92,30 @@ describe('CliError.print', () => {
       lines.join('\n')
     )
     assert.ok(lines.some((line) => line.includes('`npm install --save-dev elm`')))
+  })
+})
+
+describe('continuingSentence', () => {
+  it('lowers the first letter of an ordinary word', () => {
+    assert.equal(continuingSentence('Problem with the flags.'), 'problem with the flags.')
+  })
+
+  it('keeps a proper noun, a word in capitals, and a word with inner capitals', () => {
+    assert.deepEqual(
+      [
+        'Elm reported a problem.',
+        'TODO in module Main',
+        'TypeScript enum is not supported',
+        'ENOENT: no such file',
+      ].map(continuingSentence),
+      ['Elm reported a problem.', 'TODO in module Main', 'TypeScript enum is not supported', 'ENOENT: no such file']
+    )
+  })
+
+  it('keeps a text that starts with a file name or a symbol', () => {
+    assert.deepEqual(['src/Main.elm', '--log-info is deprecated'].map(continuingSentence), [
+      'src/Main.elm',
+      '--log-info is deprecated',
+    ])
   })
 })

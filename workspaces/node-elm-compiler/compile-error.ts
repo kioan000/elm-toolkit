@@ -11,7 +11,7 @@
  * @packageDocumentation
  */
 
-import { CliError, Maybe } from '@elm-toolkit/cli-lib'
+import { CliError, Maybe, continuingSentence } from '@elm-toolkit/cli-lib'
 
 import { LoadError } from './load-error.ts'
 
@@ -153,7 +153,7 @@ function toCliError(error: CompileError): CliError {
         summary: 'Could not create a temporary folder for the output of Elm.',
         whatHappened: [
           `The build writes the output of Elm into a new folder inside ${error.folder}, and creating that folder failed.`,
-          `The system reported: ${error.cause}`,
+          `The system reported: ${continuingSentence(error.cause)}`,
         ],
       })
     case 'OutputNotRead':
@@ -163,7 +163,7 @@ function toCliError(error: CompileError): CliError {
         summary: 'Could not read the JavaScript that Elm wrote.',
         whatHappened: [
           `Elm compiled without errors and wrote ${error.file}, but reading that file failed.`,
-          `The system reported: ${error.cause}`,
+          `The system reported: ${continuingSentence(error.cause)}`,
         ],
       })
     case 'ProgramNotLoaded':
@@ -206,7 +206,7 @@ function toCliError(error: CompileError): CliError {
         summary: `compileWorker: the module "${error.moduleName}" failed to start.`,
         whatHappened: [
           `compileWorker compiled ${error.file} and called the init function of "${error.moduleName}", which threw an error.`,
-          `Elm reported: ${error.cause}`,
+          `Elm reported: ${continuingSentence(error.cause)}`,
         ],
       })
     case 'NoPorts':
@@ -226,7 +226,7 @@ function toCliError(error: CompileError): CliError {
         summary: `findAllDependencies: could not read ${error.file}.`,
         whatHappened: [
           `findAllDependencies starts from ${error.file} to list the files it imports, but reading it failed.`,
-          `The system reported: ${error.cause}`,
+          `The system reported: ${continuingSentence(error.cause)}`,
         ],
       })
     case 'InvalidModule':
@@ -312,7 +312,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
       return CliError.create({
         solution: `Check that "${pathToElm}" is the Elm compiler, and that \`${pathToElm} --version\` works in a terminal.`,
         summary: `The Elm compiler "${pathToElm}" could not start.`,
-        whatHappened: [`The build tried to run "${pathToElm}".`, `The system reported: ${cause}`],
+        whatHappened: [`The build tried to run "${pathToElm}".`, `The system reported: ${continuingSentence(cause)}`],
       })
   }
 }
@@ -353,7 +353,7 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
         summary: `The Elm compiler "${pathToElm}" was stopped before it finished.`,
         whatHappened: [
           `The build started "${pathToElm}", and the process ended because of a signal, not with an exit code.`,
-          `The system reported: ${cause}`,
+          `The system reported: ${continuingSentence(cause)}`,
           'The build did not finish, so it says nothing about the Elm code.',
         ],
       })
