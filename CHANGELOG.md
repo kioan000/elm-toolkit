@@ -171,6 +171,10 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   error that comes from an exception keeps it in `original`.
 - `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
   that a program compiles, and writes no output.
+- `@elm-toolkit/node-elm-compiler`: `compileRunnableProgram`, in
+  `./result-api`. It compiles a program, and its `load` function runs the code
+  in the current process and returns the modules, without starting any of them.
+  A failure of `load` is a `LoadError`.
 
 ### Changed
 
@@ -202,6 +206,8 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
     reports, without the progress lines, also in the `verbose` log.
   - `compileWorker` names the compiler when it is not installed, instead of
     `Errored with exit code -2`.
+  - `compileWorker` with a module whose name has a dot, such as `Tools.Echo`,
+    suggests its full name instead of `Tools`.
 - `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
   new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
   imports of a file, webpack shows a warning in the layout of the toolkit,

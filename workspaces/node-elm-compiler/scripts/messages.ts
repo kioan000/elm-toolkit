@@ -227,10 +227,24 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
   ],
   ['ModuleNotFound', async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 }))],
   [
+    'ModuleNotFound: a module whose name has a dot',
+    async (): Promise<CompileError> => errorOf(await startWorker('Tools/Echo', 'Tools.Echo')),
+  ],
+  [
     'WorkerNotStarted',
     async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Doubler', { flags: 'three' })),
   ],
   ['NoPorts', async (): Promise<CompileError> => errorOf(await startWorker('NoPorts', 'NoPorts'))],
+  [
+    'ProgramNotLoaded: the code throws while it loads (LoadError ScriptFailed)',
+    async (): Promise<CompileError> => errorOf(await startWorker('CrashesOnLoad', 'CrashesOnLoad')),
+  ],
+  [
+    'ProgramNotLoaded: no Elm object (LoadError NoElmObject, built by hand, because no call can cause it on purpose)',
+    (): CompileError => {
+      return { file: 'src/Main.elm', loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' }
+    },
+  ],
   [
     'EntryNotRead',
     async (): Promise<CompileError> => errorOf(await findAllDependencies(path.join(app, 'src', 'Missing.elm'))),

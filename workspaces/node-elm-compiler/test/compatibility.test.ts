@@ -284,6 +284,15 @@ describe('as the original package', () => {
       )
     })
 
+    it('rejects a program that throws while it loads with an Error that holds what it threw', async () => {
+      await assert.rejects(startWorker('CrashesOnLoad', 'CrashesOnLoad'), (error) => {
+        assert.ok(error instanceof Error)
+        assert.equal(error.message, 'Error: TODO in module `CrashesOnLoad` on line 11\n\na top-level value that fails')
+
+        return true
+      })
+    })
+
     it('rejects flags of the wrong type, or missing ones, with an Error that holds the message of Elm', async () => {
       await assert.rejects(startWorker('Doubler', 'Doubler', { flags: 'x' }), (error) => {
         assert.ok(error instanceof Error)
@@ -389,6 +398,15 @@ describe('unlike the original package, on purpose', () => {
     assert.throws(
       () => compileToStringSync(source('Main'), { ...quiet, spawn: throwsOwnError }),
       (thrown) => thrown === ownError
+    )
+  })
+
+  it('suggests the full name of a module whose name has a dot, where the original suggested its first part', async () => {
+    await assert.rejects(
+      startWorker('Tools/Echo', 'Tools.Echo'),
+      new Error(
+        "I couldn't find the entry module Tools.Echo.\n\nMaybe you meant: Tools.Echo\nYou can pass me a different module to use with --module=<moduleName>"
+      )
     )
   })
 

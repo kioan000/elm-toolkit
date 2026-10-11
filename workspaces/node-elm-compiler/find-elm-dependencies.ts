@@ -556,6 +556,7 @@ function legacyDependencyError(error: CompileError): unknown {
     case 'TempFolderNotCreated':
     case 'OutputNotRead':
     case 'ModuleNotFound':
+    case 'ProgramNotLoaded':
     case 'WorkerNotStarted':
     case 'NoPorts':
       return new Error(CliError.toString(CompileError.toCliError(error)))

@@ -11,7 +11,9 @@
  * @packageDocumentation
  */
 
-import { CliError, type Maybe } from '@elm-toolkit/cli-lib'
+import { CliError, Maybe } from '@elm-toolkit/cli-lib'
+
+import { LoadError } from './load-error.ts'
 
 /**
  * One failure of a call of the Elm compiler. Read it with a `switch` on `type_`,
@@ -74,13 +76,18 @@ export type CompileError =
     }
   /** The file that the compiler wrote could not be read. */
   | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'OutputNotRead' }
-  /** The compiled Elm file has no module of that name; `suggestions` lists the ones it has. */
+  /**
+   * `compileWorker` found no module `moduleName` to start. `suggestions` has the
+   * full names, such as `Tools.Echo`. A name with a dot always ends here.
+   */
   | {
       readonly file: string
       readonly moduleName: string
       readonly suggestions: ReadonlyArray<string>
       readonly type_: 'ModuleNotFound'
     }
+  /** `compileWorker` compiled `file`, and its code failed while it loaded. */
+  | { readonly file: string; readonly loadError: LoadError; readonly type_: 'ProgramNotLoaded' }
   /** The `init` of the module threw, most often because of flags of the wrong type. */
   | {
       readonly cause: string
@@ -136,8 +143,7 @@ function toCliError(error: CompileError): CliError {
     case 'CompileFailed':
       return CliError.create({
         details: error.output.trim() === '' ? [] : error.output.trim().split('\n'),
-        solution:
-          'Follow the instructions of the Elm compiler above. They are more precise than any advice of node-elm-compiler.',
+        solution: 'Follow the instructions of the Elm compiler above. They point to the exact problem in the code.',
         summary: `Could not compile ${error.sources.join(', ')}.`,
         whatHappened: ['The Elm compiler reported an error.'],
       })
@@ -146,7 +152,7 @@ function toCliError(error: CompileError): CliError {
         solution: `Check that ${error.folder} exists, has free space and can be written. To use another folder, set the TMPDIR environment variable.`,
         summary: 'Could not create a temporary folder for the output of Elm.',
         whatHappened: [
-          `node-elm-compiler writes the output of Elm into a new folder inside ${error.folder}, and creating it failed.`,
+          `The build writes the output of Elm into a new folder inside ${error.folder}, and creating that folder failed.`,
           `The system reported: ${error.cause}`,
         ],
       })
@@ -160,17 +166,40 @@ function toCliError(error: CompileError): CliError {
           `The system reported: ${error.cause}`,
         ],
       })
-    case 'ModuleNotFound':
+    case 'ProgramNotLoaded':
+      return LoadError.toCliError(error.loadError)
+    case 'ModuleNotFound': {
+      const dotted = dottedModule(error.moduleName, error.suggestions)
+      // The module exists, and only the dot in its name stops compileWorker.
+      const exists = error.suggestions.includes(error.moduleName)
+
       return CliError.create({
-        solution: moduleNameFix(error.moduleName, error.suggestions, error.file),
-        summary: `compileWorker: ${error.file} has no module called "${error.moduleName}".`,
+        solution: dotted
+          .map(
+            (name) =>
+              `compileWorker starts only a module whose name has no dot. Give the entry module a name without a dot, for example Main in a project of its own. Or load the program with compileRunnableProgram, and start Elm.${name} yourself.`
+          )
+          .withDefault(moduleNameFix(error.moduleName, error.suggestions, error.file)),
+        summary: exists
+          ? `compileWorker: cannot start the module "${error.moduleName}", because its name has a dot.`
+          : `compileWorker: ${error.file} has no module called "${error.moduleName}".`,
         whatHappened: [
           `compileWorker compiled ${error.file}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
-          error.suggestions.length === 0
-            ? `${error.file} has no module with that name.`
-            : `${error.file} has only these modules: ${error.suggestions.join(', ')}.`,
+          ...(exists
+            ? []
+            : [
+                error.suggestions.length === 0
+                  ? `${error.file} has no module with that name.`
+                  : `${error.file} has only these modules: ${error.suggestions.join(', ')}.`,
+              ]),
+          ...dotted
+            .map((name) => [
+              `Elm puts a module whose name has a dot inside another object, as Elm.${name}, and compileWorker looks only at the first level.`,
+            ])
+            .withDefault([]),
         ],
       })
+    }
     case 'WorkerNotStarted':
       return CliError.create({
         solution: `Check the flags passed to compileWorker: they must match the type that the init function of ${error.moduleName} expects.`,
@@ -213,6 +242,24 @@ function toCliError(error: CompileError): CliError {
 }
 
 /**
+ * Finds the nested module that the error is about: the given name when it has a
+ * dot, or the first module when they all have one.
+ *
+ * @param moduleName - the given name
+ * @param suggestions - the modules of the file
+ * @returns `Just` the full name, or `Nothing` when the name is only wrong
+ */
+function dottedModule(moduleName: string, suggestions: ReadonlyArray<string>): Maybe<string> {
+  if (moduleName.includes('.')) {
+    return Maybe.Just(moduleName)
+  }
+
+  const [first] = suggestions
+
+  return first !== undefined && suggestions.every((name) => name.includes('.')) ? Maybe.Just(first) : Maybe.Nothing
+}
+
+/**
  * Says how to change the module name that `compileWorker` received.
  *
  * @param moduleName - the name that was given
@@ -249,7 +296,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
           'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
         summary: `The Elm compiler "${pathToElm}" was not found.`,
         whatHappened: [
-          `node-elm-compiler tried to run "${pathToElm}", and the system found no program with that name or path.`,
+          `The build tried to run "${pathToElm}", and the system found no program with that name or path.`,
         ],
       })
     case 'EACCES':
@@ -265,7 +312,7 @@ function startError(pathToElm: string, code: string, cause: string): CliError {
       return CliError.create({
         solution: `Check that "${pathToElm}" is the Elm compiler, and that \`${pathToElm} --version\` works in a terminal.`,
         summary: `The Elm compiler "${pathToElm}" could not start.`,
-        whatHappened: [`node-elm-compiler tried to run "${pathToElm}".`, `The system reported: ${cause}`],
+        whatHappened: [`The build tried to run "${pathToElm}".`, `The system reported: ${cause}`],
       })
   }
 }
@@ -305,7 +352,7 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
           'Run the build again. If it stops again, check whether a program or the system stops it, for example when memory runs out.',
         summary: `The Elm compiler "${pathToElm}" was stopped before it finished.`,
         whatHappened: [
-          `node-elm-compiler started "${pathToElm}", and the process ended because of a signal, not with an exit code.`,
+          `The build started "${pathToElm}", and the process ended because of a signal, not with an exit code.`,
           `The system reported: ${cause}`,
           'The build did not finish, so it says nothing about the Elm code.',
         ],

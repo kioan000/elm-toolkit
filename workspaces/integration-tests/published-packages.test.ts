@@ -198,6 +198,15 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
     assert.match(example, /^port module Main exposing \(main\)/)
   })
 
+  it('exports the compiler functions that the runner loads programs with', () => {
+    const exported = runInConsumer(`
+      const api = await import('@elm-toolkit/node-elm-compiler/result-api')
+      console.log(typeof api.compileRunnableProgram, typeof api.LoadError.toCliError)
+    `)
+
+    assert.equal(exported, 'function function')
+  })
+
   it('does not run the runner when the package is imported', () => {
     const exported = runInConsumer(`
       const runner = await import('@elm-toolkit/elm-node-runner')

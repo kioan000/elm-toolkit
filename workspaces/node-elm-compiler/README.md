@@ -89,6 +89,26 @@ const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.e
 `compileWorker` compiles a headless Elm program and starts it in the current
 process. Tools written in Elm use it to exchange data with Node through ports.
 
+`compileRunnableProgram` does the first half of that work. It compiles a
+program and returns it with a `load` function, which runs the compiled code in
+the current process and returns its modules, without starting any of them. The
+caller then chooses the module, the flags and the ports. Each call of `load`
+gives a new instance of the program, and nothing becomes global.
+
+```ts
+import { compileRunnableProgram } from '@elm-toolkit/node-elm-compiler/result-api'
+
+const compileRunnableProgramResult = await compileRunnableProgram(['src/Main.elm'], { optimize: true })
+// Ok { javascript, load }, or Err with a CompileError
+
+if (compileRunnableProgramResult.type_ === 'Ok') {
+  const loadResult = compileRunnableProgramResult.value.load()
+  // Ok { Main: { init } }, or Err with a LoadError when the code throws while it loads
+
+  loadResult.map((elm) => elm.Main?.init({ flags: { name: 'Ada' } }))
+}
+```
+
 ## Moving to the new API
 
 Each function of the old API has a function with the same name in
@@ -160,6 +180,10 @@ one of the other checks fail, it breaks code written for the original package.
   original printed them and said only the exit code.
 - A module without ports in `compileWorker` gets the message about ports. The
   original failed with a `TypeError` of its own code.
+- `compileWorker` still cannot start a module whose name has a dot, such as
+  `Tools.Echo`, because Elm nests it as `Elm.Tools.Echo`. The suggestions of the
+  error give the full name, `Tools.Echo`. The original suggested `Tools`, which
+  has no `init`.
 - `compileWorker` does not change the working directory of the process while
   Elm runs, and removes its temporary folder at once. The original changed the
   directory, and removed the folder when the process ended.

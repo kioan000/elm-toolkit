@@ -19,8 +19,12 @@ import { CliError, Maybe, type Result } from '@elm-toolkit/cli-lib'
 import {
   CompileError,
   type CompilerOptions,
+  type ElmNamespace,
+  LoadError,
+  type RunnableProgram,
   type WorkerWithPorts,
   compile,
+  compileRunnableProgram,
   compileSync,
   compileToString,
   compileToStringSync,
@@ -66,6 +70,21 @@ function valueOf<A>(result: Result<CompileError, A>): A {
       return result.value
     case 'Err':
       return assert.fail(`expected an Ok, got ${CliError.toString(CompileError.toCliError(result.error))}`)
+  }
+}
+
+/**
+ * Takes the modules out of a load that must have succeeded.
+ *
+ * @param result - the result of `load`
+ * @returns the modules
+ */
+function loadedOf(result: Result<LoadError, ElmNamespace>): ElmNamespace {
+  switch (result.type_) {
+    case 'Ok':
+      return result.value
+    case 'Err':
+      return assert.fail(`expected a load, got ${CliError.toString(LoadError.toCliError(result.error))}`)
   }
 }
 
@@ -378,6 +397,86 @@ describe('compileSync and compileToStringSync', () => {
   })
 })
 
+describe('compileRunnableProgram', () => {
+  /**
+   * Compiles a module of the fixture project, which must succeed.
+   *
+   * @param name - the name of the Elm file in `src`, without the extension
+   * @param options - more compiler options
+   * @returns the compiled program
+   */
+  async function runnable(name: string, options: CompilerOptions = {}): Promise<RunnableProgram> {
+    return valueOf(await compileRunnableProgram(source(name), { ...inApp, ...options }))
+  }
+
+  /**
+   * Starts a Doubler of a loaded program, sends it a value and waits for the answer.
+   *
+   * @param elm - the modules of a loaded program
+   * @param factor - the flags of the Doubler
+   * @param value - the value to send
+   * @returns the value that the Doubler answers
+   */
+  function double(elm: ElmNamespace, factor: number, value: number): Promise<unknown> {
+    const worker = elm.Doubler?.init({ flags: factor }) as {
+      ports: {
+        input: { send: (value: number) => void }
+        output: { subscribe: (listener: (value: unknown) => void) => void }
+      }
+    }
+    const answered = new Promise((resolve) => {
+      worker.ports.output.subscribe(resolve)
+    })
+
+    worker.ports.input.send(value)
+
+    return answered
+  }
+
+  it('returns the JavaScript of the program, and loads its modules without starting any', async () => {
+    const program = await runnable('Doubler')
+    const elm = loadedOf(program.load())
+
+    assert.match(program.javascript, /\$author\$project\$Doubler\$main/)
+    assert.deepEqual(Object.keys(elm), ['Doubler'])
+    assert.equal(typeof elm.Doubler?.init, 'function')
+  })
+
+  it('gives a new instance of the program at each load, and adds nothing to the globals', async () => {
+    const program = await runnable('Doubler')
+
+    assert.deepEqual(
+      await Promise.all([double(loadedOf(program.load()), 3, 2), double(loadedOf(program.load()), 5, 2)]),
+      [6, 10]
+    )
+    assert.equal('Elm' in globalThis, false)
+  })
+
+  it('always returns JavaScript, also when output asks for HTML', async () => {
+    assert.doesNotMatch((await runnable('Doubler', { output: 'index.html' })).javascript, /<!DOCTYPE/i)
+  })
+
+  it('returns a type error as a failed build, before anything is loaded', async () => {
+    assert.equal(errorOf(await compileRunnableProgram(source('Broken'), inApp)).type_, 'CompileFailed')
+  })
+
+  it('returns a program that throws while it loads as ScriptFailed, with a stack that names the compiled code', async () => {
+    const program = await runnable('CrashesOnLoad')
+    const loaded = program.load()
+
+    assert.equal(loaded.type_, 'Err')
+
+    const error = loaded.type_ === 'Err' ? loaded.error : undefined
+
+    assert.equal(error?.type_, 'ScriptFailed')
+    assert.match(error?.type_ === 'ScriptFailed' ? error.cause : '', /^TODO in module `CrashesOnLoad`/)
+    assert.match(
+      error?.type_ === 'ScriptFailed' && error.original instanceof Error ? (error.original.stack ?? '') : '',
+      /elm-program\.js:\d+/
+    )
+  })
+})
+
 describe('compileWorker', () => {
   /**
    * Starts a worker from the fixture project, with the pinned compiler first on
@@ -421,6 +520,24 @@ describe('compileWorker', () => {
     })
   })
 
+  it('returns a module whose name has a dot as not found, with its full name as the suggestion', async () => {
+    assert.deepEqual(errorOf(await startWorker('Tools/Echo', 'Tools.Echo')), {
+      file: 'src/Tools/Echo.elm',
+      moduleName: 'Tools.Echo',
+      suggestions: ['Tools.Echo'],
+      type_: 'ModuleNotFound',
+    })
+  })
+
+  it('returns the first part of a nested name as not found, because it has no init', async () => {
+    assert.deepEqual(errorOf(await startWorker('Tools/Echo', 'Tools')), {
+      file: 'src/Tools/Echo.elm',
+      moduleName: 'Tools',
+      suggestions: ['Tools.Echo'],
+      type_: 'ModuleNotFound',
+    })
+  })
+
   it('returns flags of the wrong type as a worker that did not start', async () => {
     const error = errorOf(await startWorker('Doubler', 'Doubler', { flags: 'not a number' }))
 
@@ -441,6 +558,18 @@ describe('compileWorker', () => {
 
     assert.equal(error.type_, 'CompileFailed')
     assert.match(error.type_ === 'CompileFailed' ? error.output : '', /TYPE MISMATCH/)
+  })
+
+  it('returns a program that throws while it loads as a program that was not loaded', async () => {
+    const error = errorOf(await startWorker('CrashesOnLoad', 'CrashesOnLoad'))
+
+    assert.equal(error.type_, 'ProgramNotLoaded')
+    assert.equal(error.type_ === 'ProgramNotLoaded' ? error.loadError.type_ : undefined, 'ScriptFailed')
+    assert.equal(
+      CompileError.toCliError(error).summary,
+      'The compiled Elm program failed while it loaded.',
+      'the message is the one of the load error'
+    )
   })
 
   /**
@@ -558,6 +687,24 @@ describe('findAllDependencies', () => {
   })
 })
 
+describe('LoadError.toCliError', () => {
+  it('points to the top-level values when the code throws while it loads', () => {
+    const error = LoadError.toCliError({
+      cause: 'TODO in module `CrashesOnLoad` on line 11',
+      original: new Error('TODO in module `CrashesOnLoad` on line 11'),
+      type_: 'ScriptFailed',
+    })
+
+    assert.equal(error.summary, 'The compiled Elm program failed while it loaded.')
+    assert.match(error.whatHappened.join('\n'), /The program reported: TODO in module/)
+    assert.match(error.solution.withDefault(''), /Debug\.todo/)
+  })
+
+  it('asks for a bug report when the code does not produce the Elm object', () => {
+    assert.match(LoadError.toCliError({ type_: 'NoElmObject' }).solution.withDefault(''), /bug of node-elm-compiler/)
+  })
+})
+
 describe('CompileError.toCliError', () => {
   it('points to the flags when a worker did not start', () => {
     const error = CompileError.toCliError({
@@ -668,6 +815,40 @@ describe('CompileError.toCliError', () => {
 
     assert.equal(error.summary, 'compileWorker: src/Doubler.elm has no module called "Dubler".')
     assert.equal(error.solution.withDefault(''), 'Change moduleName from "Dubler" to "Doubler".')
+  })
+
+  it('explains that compileWorker does not start a module whose name has a dot, and what to do instead', () => {
+    const error = CompileError.toCliError({
+      file: 'src/Tools/Echo.elm',
+      moduleName: 'Tools.Echo',
+      suggestions: ['Tools.Echo'],
+      type_: 'ModuleNotFound',
+    })
+
+    assert.equal(error.summary, 'compileWorker: cannot start the module "Tools.Echo", because its name has a dot.')
+    assert.equal(
+      error.solution.withDefault(''),
+      'compileWorker starts only a module whose name has no dot. Give the entry module a name without a dot, for example Main in a project of its own. Or load the program with compileRunnableProgram, and start Elm.Tools.Echo yourself.'
+    )
+    assert.equal(
+      error.whatHappened.at(-1),
+      'Elm puts a module whose name has a dot inside another object, as Elm.Tools.Echo, and compileWorker looks only at the first level.'
+    )
+  })
+
+  it('gives the same explanation for a name without a dot when every module of the file has one', () => {
+    const error = CompileError.toCliError({
+      file: 'src/Tools/Echo.elm',
+      moduleName: 'Echo',
+      suggestions: ['Tools.Echo'],
+      type_: 'ModuleNotFound',
+    })
+
+    assert.equal(error.summary, 'compileWorker: src/Tools/Echo.elm has no module called "Echo".')
+    assert.match(
+      error.solution.withDefault(''),
+      /^compileWorker starts only a module whose name has no dot\..*Elm\.Tools\.Echo/
+    )
   })
 
   it('explains why a worker without ports is an error, and where to learn about ports', () => {
