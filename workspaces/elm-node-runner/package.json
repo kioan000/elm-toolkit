@@ -24,6 +24,7 @@
     "command.ts",
     "lib/examples.ts",
     "lib/runner.ts",
+    "lib/runner-error.ts",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
   ],
@@ -34,6 +35,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
+    "messages": "tsc -p scripts/tsconfig.json && node scripts/messages.ts",
     "prepare": "yarn build",
     "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
   },

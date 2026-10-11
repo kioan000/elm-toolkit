@@ -214,7 +214,7 @@ describe('the published packages', { concurrency: false, timeout: 300_000 }, () 
       console.log(typeof runner.main, Object.keys(library).sort().join(','))
     `)
 
-    assert.equal(exported, 'function compileProgram,runElm,startMain')
+    assert.equal(exported, 'function RunnerError,compileProgram,runElm,startMain')
   })
 
   it('ships the hot reload runtime that the loader reads', () => {

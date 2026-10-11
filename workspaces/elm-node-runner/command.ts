@@ -15,10 +15,10 @@
 import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 
-import { isEntryPoint, prettyError, readPackageJson } from '@elm-toolkit/cli-lib'
+import { CliError, isEntryPoint, readPackageJson } from '@elm-toolkit/cli-lib'
 
 import { exampleElm, exampleLauncher } from './lib/examples.ts'
-import { runElm } from './lib/runner.ts'
+import { RunnerError, runElm } from './lib/runner.ts'
 
 /**
  * The help text that `--help` prints, and that wrong usage prints as well.
@@ -40,7 +40,7 @@ object and starts the program itself.
 
   --ts <file>     a TypeScript or JavaScript launcher
   --optimize      build with elm make --optimize
-  --log-info      print the compiler command before it runs
+  --log-info      print the compiler command, and the messages of Elm
   --example-elm   print a starter Main.elm
   --example-ts    print a starter launcher for it
   --version       print the version
@@ -48,9 +48,9 @@ object and starts the program itself.
 `
 
 /**
- * Runs the command with the given arguments. Help, version and examples go to
- * standard output; problems go to the console as errors, followed by the help
- * when the arguments were wrong.
+ * Runs the command with the given arguments. Help, version, examples and the
+ * error of a failed run go to standard output. Wrong arguments go to standard
+ * error, followed by the help.
  *
  * @example
  *
@@ -124,14 +124,20 @@ export async function main(args: string[]): Promise<number> {
     return 1
   }
 
-  try {
-    await runElm({ elmFiles, launcher: values.ts, optimize: values.optimize, verbose: values['log-info'] })
+  const runElmResult = await runElm({
+    elmFiles,
+    launcher: values.ts,
+    optimize: values.optimize,
+    verbose: values['log-info'],
+  })
 
-    return 0
-  } catch (error) {
-    prettyError('elm-node-runner', error instanceof Error ? error.message : String(error))
+  switch (runElmResult.type_) {
+    case 'Ok':
+      return 0
+    case 'Err':
+      CliError.print('elm-node-runner', RunnerError.toCliError(runElmResult.error))
 
-    return 1
+      return 1
   }
 }
 
