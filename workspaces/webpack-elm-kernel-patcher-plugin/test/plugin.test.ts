@@ -17,10 +17,11 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, it, mock } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { findElmBinary } from '@elm-toolkit/cli-lib'
+
 import createWebpackCompiler from 'webpack'
 
 import ElmKernelPatcherPlugin from '../index.ts'
-import { findElmBinary } from './elm-binary.ts'
 
 // The versions of the packages inside the patch archive of the patcher.
 const patchedVersions = {
@@ -31,7 +32,7 @@ const patchedVersions = {
 }
 
 // The Elm versions that the patcher supports.
-const supportedElmVersions = ['0.19.1', '0.19.2']
+const supportedElmVersions = ['0.19.1', '0.19.2', '0.19.3']
 
 // The patcher once extracted its archive here, inside the installed package, which can be read only.
 const extractedPatches = path.join(
@@ -146,7 +147,8 @@ describe('ElmKernelPatcherPlugin', () => {
     })
   }
 
-  it('makes the Elm 0.19.2 compiler build against the patched kernel', () => {
+  it('makes the Elm compiler build against the patched kernel', () => {
+    const elmVersion = execFileSync(findElmBinary(import.meta.url), ['--version'], { encoding: 'utf8' }).trim()
     const fixture = path.join(import.meta.dirname, 'fixtures', 'project')
     const output = path.join(elmHome, 'main.js')
     const compile = (home: string | undefined, to: string): void => {
@@ -155,13 +157,17 @@ describe('ElmKernelPatcherPlugin', () => {
       if (home === undefined) {
         delete env.ELM_HOME
       }
-      execFileSync(findElmBinary(), ['make', 'src/Main.elm', `--output=${to}`], { cwd: fixture, env, stdio: 'ignore' })
+      execFileSync(findElmBinary(import.meta.url), ['make', 'src/Main.elm', `--output=${to}`], {
+        cwd: fixture,
+        env,
+        stdio: 'ignore',
+      })
     }
 
     // The first build fills the usual ELM_HOME, which CI caches, so the temporary one is a copy
     // and the packages are downloaded once; the usual ELM_HOME itself is never patched.
     compile(originalElmHome, '/dev/null')
-    cpSync(path.join(originalElmHome ?? path.join(homedir(), '.elm'), '0.19.2'), path.join(elmHome, '0.19.2'), {
+    cpSync(path.join(originalElmHome ?? path.join(homedir(), '.elm'), elmVersion), path.join(elmHome, elmVersion), {
       recursive: true,
     })
     rmSync(path.join(fixture, 'elm-stuff'), { force: true, recursive: true })
@@ -205,7 +211,9 @@ describe('ElmKernelPatcherPlugin', () => {
         () => createCompiler(new ElmKernelPatcherPlugin({ elmJsonFolder: project, isEnabled: true })),
         (thrown) =>
           thrown instanceof Error &&
-          thrown.message.includes(`The patches support Elm 0.19.1 and 0.19.2, but elm.json declares ${elmVersion}.`)
+          thrown.message.includes(
+            `The patches support Elm 0.19.1, 0.19.2, and 0.19.3, but elm.json declares ${elmVersion}.`
+          )
       )
       assert.deepEqual(readdirSync(elmHome), [], 'nothing should be copied')
       assert.equal(existsSync(extractedPatches), false, 'nothing should be extracted')

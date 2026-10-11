@@ -36,7 +36,7 @@
     "webpack": "^5.0.0"
   },
   "devDependencies": {
-    "elm": "^0.19.2-0",
+    "elm": "^0.19.3-0",
     "typescript": "^6.0.3",
     "webpack": "^5.111.1"
   }

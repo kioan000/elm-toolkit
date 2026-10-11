@@ -37,13 +37,14 @@ const __dirname = import.meta.dirname
 
 /**
  * The Elm versions the patches are known to work with, each mapped to the
- * archive that holds its patches. The same patches work on 0.19.1 and 0.19.2,
- * so both use one archive; a version that needs other patches gets an archive of
- * its own here. A project on a version that is not listed is refused.
+ * archive that holds its patches. The same patches work on 0.19.1, 0.19.2 and
+ * 0.19.3, so they use one archive; a version that needs other patches gets an
+ * archive of its own here. A project on a version that is not listed is refused.
  */
 const patchArchives: Readonly<Record<string, string>> = {
   '0.19.1': 'patches.tar.gz',
   '0.19.2': 'patches.tar.gz',
+  '0.19.3': 'patches.tar.gz',
 }
 
 /**
@@ -344,8 +345,8 @@ function readElmVersion(elmJsonPath: string, bundledPatches: boolean): Result<Cl
         ? Result.Ok(elmVersion)
         : Result.Err(
             CliError.create({
-              solution: `Use Elm ${supported.join(' or ')}, or give patches made for Elm ${elmVersion} with \`--patches <folder>\`.`,
-              summary: `The patches support Elm ${supported.join(' and ')}, but elm.json declares ${elmVersion}.`,
+              solution: `Use Elm ${new Intl.ListFormat('en', { type: 'disjunction' }).format(supported)}, or give patches made for Elm ${elmVersion} with \`--patches <folder>\`.`,
+              summary: `The patches support Elm ${new Intl.ListFormat('en').format(supported)}, but elm.json declares ${elmVersion}.`,
               whatHappened: [`file: ${shown(elmJsonPath)}`],
             })
           )

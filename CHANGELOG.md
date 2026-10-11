@@ -158,6 +158,11 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ### Added
 
+- Every package works with Elm 0.19.3. CI runs the whole test suite with Elm
+  0.19.1, 0.19.2, and 0.19.3.
+- `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: the bundled patches
+  accept a project on Elm 0.19.3. The patches are the same as for 0.19.1 and
+  0.19.2.
 - `@elm-toolkit/cli-lib`: `findElmBinary`, which finds the `elm` executable that
   the calling package depends on. `ELM_TEST_BINARY` replaces it with another
   one, for example to run tests with an older Elm.

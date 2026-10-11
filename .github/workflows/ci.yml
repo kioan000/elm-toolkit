@@ -17,8 +17,13 @@ env:
 
 jobs:
   check:
-    name: Lint, format, build and test
+    name: Check with Elm ${{ matrix.elm }}
     runs-on: ubuntu-latest
+    # The toolkit supports every version below, so each one runs the whole test suite.
+    strategy:
+      fail-fast: false
+      matrix:
+        elm: ['0.19.1', '0.19.2', '0.19.3']
     steps:
       - uses: actions/checkout@v7
 
@@ -46,16 +51,39 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.elm
-          key: elm-${{ runner.os }}-${{ hashFiles('workspaces/*/test/fixtures/**/elm.json') }}
+          key: elm-${{ matrix.elm }}-${{ runner.os }}-${{ hashFiles('workspaces/*/test/fixtures/**/elm.json') }}
           restore-keys: |
-            elm-${{ runner.os }}-
+            elm-${{ matrix.elm }}-${{ runner.os }}-
 
       # The install also builds every workspace, through the root postinstall
       # script, and fails if the lockfile is not current.
       - run: yarn install --immutable
 
-      - run: yarn eslint .
+      # The elm dev dependency pins the newest version. For an older one, the tests
+      # run another compiler through ELM_TEST_BINARY, and the test projects declare
+      # that version, because Elm refuses an elm.json made for another one.
+      - name: Use Elm ${{ matrix.elm }} in the tests
+        if: matrix.elm != '0.19.3'
+        run: |
+          npm install --prefix "$RUNNER_TEMP/elm" "elm@latest-${{ matrix.elm }}"
+          echo "ELM_TEST_BINARY=$RUNNER_TEMP/elm/node_modules/elm/bin/elm" >> "$GITHUB_ENV"
+          sed -i 's/"elm-version": "0.19.3"/"elm-version": "${{ matrix.elm }}"/' workspaces/*/test/fixtures/*/elm.json
 
-      - run: yarn prettier --check .
+      - if: matrix.elm == '0.19.3'
+        run: yarn eslint .
+
+      - if: matrix.elm == '0.19.3'
+        run: yarn prettier --check .
 
       - run: yarn test
+
+  # The protection of main requires a check with this name. It passes only when
+  # every version of the matrix passed, so the rule does not list the versions.
+  all:
+    name: Lint, format, build and test
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.check.result != 'success'
+        run: exit 1
