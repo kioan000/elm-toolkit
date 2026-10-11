@@ -92,6 +92,10 @@ most projects use come first.
 
 **Added**
 
+- `ElmLoaderOptions`, the type of the options, for a `webpack.config.ts`.
+  A rule names the loader by its package name or path, so the options are the
+  part that TypeScript can check, and a misspelled option becomes an error in
+  the editor. The README shows a typed configuration.
 - `hotModuleReplacement`, on by default when webpack runs in development mode.
 - Hot module replacement uses `Elm.hot.reload()` when the kernel offers it, as
   the patched `elm/core` does. That is what keeps the state of your app.

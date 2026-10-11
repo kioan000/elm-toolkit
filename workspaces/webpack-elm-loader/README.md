@@ -47,6 +47,42 @@ In watch mode the loader reports every local module that the entry imports, so a
 change in any of them starts a new build. With `cwd`, it also watches `elm.json`
 and each source directory, so a new file is noticed too.
 
+## Typed configuration
+
+In a rule, webpack finds a loader by its package name or by its path, as with
+`require.resolve('./my-loader')`, and loads the module itself. The rule never
+holds the loader function, so TypeScript cannot check the loader. It can check
+its options: give them the type `ElmLoaderOptions`, and a misspelled option,
+such as `optimise`, is an error in your editor. The plugin of the kernel
+patcher is a class that you create, so its options are checked too.
+
+```ts
+// webpack.config.ts
+import type { Configuration } from 'webpack'
+import ElmKernelPatcherPlugin from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
+import type { ElmLoaderOptions } from '@elm-toolkit/webpack-elm-loader'
+
+const elmLoaderOptions: ElmLoaderOptions = { cwd: import.meta.dirname, elmHome: 'elm-home/elm-stuff' }
+
+export default {
+  module: {
+    rules: [
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        use: { loader: '@elm-toolkit/webpack-elm-loader', options: elmLoaderOptions },
+      },
+    ],
+  },
+  plugins: [
+    new ElmKernelPatcherPlugin({
+      elmHome: 'elm-home/elm-stuff',
+      isEnabled: (compiler) => compiler.options.mode === 'development',
+    }),
+  ],
+} satisfies Configuration
+```
+
 ## Reloading in place
 
 In development mode the loader adds hot module replacement to the compiled code.
