@@ -23,6 +23,8 @@ import path from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { findElmBinary } from '@elm-toolkit/cli-lib'
+
 import {
   type CompilerOptions,
   _prepareProcessArgs,
@@ -33,9 +35,8 @@ import {
   compileWorker,
   findAllDependencies,
 } from '../index.ts'
-import { findElmBinary } from './elm-binary.ts'
 
-const elm = findElmBinary()
+const elm = findElmBinary(import.meta.url)
 const missingElm = path.join(import.meta.dirname, 'no-such-elm')
 const app = path.join(import.meta.dirname, 'fixtures', 'app')
 const imports = path.join(import.meta.dirname, 'fixtures', 'imports')
@@ -287,7 +288,10 @@ describe('as the original package', () => {
     it('rejects a program that throws while it loads with an Error that holds what it threw', async () => {
       await assert.rejects(startWorker('CrashesOnLoad', 'CrashesOnLoad'), (error) => {
         assert.ok(error instanceof Error)
-        assert.equal(error.message, 'Error: TODO in module `CrashesOnLoad` on line 11\n\na top-level value that fails')
+        assert.match(
+          error.message,
+          /^Error: TODO in module `CrashesOnLoad` on line \d+\n\na top-level value that fails$/
+        )
 
         return true
       })

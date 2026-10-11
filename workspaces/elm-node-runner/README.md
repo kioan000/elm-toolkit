@@ -40,7 +40,7 @@ Run it:
 
 ```sh
 npx elm-node-runner src/Main.elm
-# Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize …
+# Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.3/optimize …
 # Hello from Elm
 ```
 
@@ -131,9 +131,9 @@ if (runElmResult.type_ === 'Err') {
 
 ## Compatibility
 
-The runner works with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
-the `elm` npm package. The `elm-version` in `elm.json` must match the compiler,
-as the README of `@elm-toolkit/node-elm-compiler` explains.
+The runner works with Elm 0.19.1, 0.19.2, and 0.19.3. CI runs the whole test
+suite with each of them. The `elm-version` in `elm.json` must match the
+compiler, as the README of `@elm-toolkit/node-elm-compiler` explains.
 
 ## Requirements
 

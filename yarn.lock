@@ -54,7 +54,7 @@ __metadata:
   dependencies:
     "@elm-toolkit/cli-lib": "workspace:^"
     "@elm-toolkit/node-elm-compiler": "workspace:^"
-    elm: "npm:^0.19.2-0"
+    elm: "npm:^0.19.3-0"
     typescript: "npm:^6.0.3"
   bin:
     elm-node-runner: ./dist/command.js
@@ -74,7 +74,7 @@ __metadata:
   resolution: "@elm-toolkit/node-elm-compiler@workspace:workspaces/node-elm-compiler"
   dependencies:
     "@elm-toolkit/cli-lib": "workspace:^"
-    elm: "npm:^0.19.2-0"
+    elm: "npm:^0.19.3-0"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -85,7 +85,7 @@ __metadata:
   dependencies:
     "@elm-toolkit/cli-elm-kernel-patcher": "workspace:^"
     "@elm-toolkit/cli-lib": "workspace:^"
-    elm: "npm:^0.19.2-0"
+    elm: "npm:^0.19.3-0"
     typescript: "npm:^6.0.3"
     webpack: "npm:^5.111.1"
   peerDependencies:
@@ -99,7 +99,7 @@ __metadata:
   dependencies:
     "@elm-toolkit/cli-lib": "workspace:^"
     "@elm-toolkit/node-elm-compiler": "workspace:^"
-    elm: "npm:^0.19.2-0"
+    elm: "npm:^0.19.3-0"
     typescript: "npm:^6.0.3"
     webpack: "npm:^5.111.1"
   peerDependencies:
@@ -107,37 +107,37 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@elm_binaries/darwin_arm64@npm:0.19.2-0":
-  version: 0.19.2-0
-  resolution: "@elm_binaries/darwin_arm64@npm:0.19.2-0"
+"@elm_binaries/darwin_arm64@npm:0.19.3-0":
+  version: 0.19.3-0
+  resolution: "@elm_binaries/darwin_arm64@npm:0.19.3-0"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@elm_binaries/darwin_x64@npm:0.19.2-0":
-  version: 0.19.2-0
-  resolution: "@elm_binaries/darwin_x64@npm:0.19.2-0"
+"@elm_binaries/darwin_x64@npm:0.19.3-0":
+  version: 0.19.3-0
+  resolution: "@elm_binaries/darwin_x64@npm:0.19.3-0"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@elm_binaries/linux_arm64@npm:0.19.2-0":
-  version: 0.19.2-0
-  resolution: "@elm_binaries/linux_arm64@npm:0.19.2-0"
+"@elm_binaries/linux_arm64@npm:0.19.3-0":
+  version: 0.19.3-0
+  resolution: "@elm_binaries/linux_arm64@npm:0.19.3-0"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"@elm_binaries/linux_x64@npm:0.19.2-0":
-  version: 0.19.2-0
-  resolution: "@elm_binaries/linux_x64@npm:0.19.2-0"
+"@elm_binaries/linux_x64@npm:0.19.3-0":
+  version: 0.19.3-0
+  resolution: "@elm_binaries/linux_x64@npm:0.19.3-0"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"@elm_binaries/win32_x64@npm:0.19.2-0":
-  version: 0.19.2-0
-  resolution: "@elm_binaries/win32_x64@npm:0.19.2-0"
+"@elm_binaries/win32_x64@npm:0.19.3-0":
+  version: 0.19.3-0
+  resolution: "@elm_binaries/win32_x64@npm:0.19.3-0"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
@@ -1298,15 +1298,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"elm@npm:^0.19.2-0":
-  version: 0.19.2-0
-  resolution: "elm@npm:0.19.2-0"
+"elm@npm:^0.19.3-0":
+  version: 0.19.3-0
+  resolution: "elm@npm:0.19.3-0"
   dependencies:
-    "@elm_binaries/darwin_arm64": "npm:0.19.2-0"
-    "@elm_binaries/darwin_x64": "npm:0.19.2-0"
-    "@elm_binaries/linux_arm64": "npm:0.19.2-0"
-    "@elm_binaries/linux_x64": "npm:0.19.2-0"
-    "@elm_binaries/win32_x64": "npm:0.19.2-0"
+    "@elm_binaries/darwin_arm64": "npm:0.19.3-0"
+    "@elm_binaries/darwin_x64": "npm:0.19.3-0"
+    "@elm_binaries/linux_arm64": "npm:0.19.3-0"
+    "@elm_binaries/linux_x64": "npm:0.19.3-0"
+    "@elm_binaries/win32_x64": "npm:0.19.3-0"
   dependenciesMeta:
     "@elm_binaries/darwin_arm64":
       optional: true
@@ -1320,7 +1320,7 @@ __metadata:
       optional: true
   bin:
     elm: bin/elm
-  checksum: 10c0/1c0a901085b9fcdd109b66913f9a71103b0465ca152caab624ac1ef27c803b7b15dc819489101a3eea03c8cd9881354caf0808b9d9fa8824ca5a5e10b26529bb
+  checksum: 10c0/60f4578da6913eea4562f64f0b02ef7f63e1d9e0c29316aaeba51fe7b3eed0583fc02392fcce80bf8f43fc3772b6fdceccacda87a591971a110587ae20219f4b
   languageName: node
   linkType: hard
 

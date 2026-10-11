@@ -160,11 +160,11 @@ leaves room for more settings later.
 
 ## What it does
 
-The tool first reads `elm-version` from `elm.json` and checks it against the
-Elm versions it supports today, 0.19.1 and 0.19.2. It stops on any other
+The tool first reads `elm-version` from `elm.json` and checks it against the Elm
+versions it supports today, 0.19.1, 0.19.2, and 0.19.3. It stops on any other
 version before it changes anything. This is a safety measure. The patcher
-expects a specific folder structure in the Elm home, and another Elm version
-may change it.
+expects a specific folder structure in the Elm home, and another Elm version may
+change it.
 
 With patches of your own, this check is skipped. Each patched package still
 carries its own version, and it must match the version that `elm.json` pins.
@@ -215,7 +215,7 @@ buildArchive({ elmJsonFolder: 'frontend' })
 
 Node 24, an Elm project with a valid `elm.json`, and `tar` on the `PATH` when the
 patches come from an archive. With the bundled patches, the project uses Elm
-0.19.1 or 0.19.2. The `archive` commands also need `git`.
+0.19.1, 0.19.2, or 0.19.3. The `archive` commands also need `git`.
 
 The package installs one executable, which runs the compiled JavaScript in
 `dist/`. Node refuses to strip TypeScript types from files under `node_modules`,

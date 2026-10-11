@@ -37,14 +37,14 @@
     "clean": "tsc -b --clean",
     "messages": "tsc -p scripts/tsconfig.json && node scripts/messages.ts",
     "prepare": "yarn build",
-    "test": "tsc -p test/tsconfig.json && node --test \"test/**/*.test.ts\""
+    "test": "tsc -p test/tsconfig.json && node --test --test-concurrency=1 \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@elm-toolkit/cli-lib": "workspace:^",
     "@elm-toolkit/node-elm-compiler": "workspace:^"
   },
   "devDependencies": {
-    "elm": "^0.19.2-0",
+    "elm": "^0.19.3-0",
     "typescript": "^6.0.3"
   }
 }

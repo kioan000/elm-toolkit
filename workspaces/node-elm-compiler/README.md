@@ -153,14 +153,15 @@ Some results changed shape:
 
 ## Compatibility
 
-The package works with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
-the `elm` npm package.
+The package works with Elm 0.19.1, 0.19.2, and 0.19.3. CI runs the whole test
+suite with each of them. Locally the tests run Elm 0.19.3, from the `elm` npm
+package, and `ELM_TEST_BINARY` makes them run another compiler.
 
-The compiler version and the project must agree. Elm 0.19.2 refuses an
-application whose `elm.json` declares `"elm-version": "0.19.1"`, and the other
-way round. Each version also keeps its own package cache, in `ELM_HOME/0.19.1`
-and `ELM_HOME/0.19.2`, so the first build after a change of version downloads the
-packages again.
+The compiler version and the project must agree. Elm 0.19.3 refuses an
+application whose `elm.json` declares `"elm-version": "0.19.2"`, and the other
+way round. Each version also keeps its own package cache, such as
+`ELM_HOME/0.19.2` and `ELM_HOME/0.19.3`, so the first build after a change of
+version downloads the packages again.
 
 ### Differences from the original package
 

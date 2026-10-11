@@ -89,22 +89,22 @@ runtime stays off. Otherwise the elm-hot runtime does the work, as before.
 
 ## Compatibility
 
-The loader works with Elm 0.19.1 and Elm 0.19.2. The tests run Elm 0.19.2, from
-the `elm` npm package.
+The loader works with Elm 0.19.1, 0.19.2, and 0.19.3. CI runs the whole test
+suite with each of them.
 
 Hot module replacement depends on internal functions of the Elm runtime, which
-it replaces to keep the state across a reload. Those functions have the same code
-in 0.19.1 and 0.19.2. With 0.19.2, a `Browser.application` served by
-webpack-dev-server takes a change to its Elm code in place: the view updates and
-the model keeps its values.
+it replaces to keep the state across a reload. The tests of hot module
+replacement pass with the three versions. With 0.19.2, a `Browser.application`
+served by webpack-dev-server takes a change to its Elm code in place: the view
+updates and the model keeps its values.
 
 The rules of `@elm-toolkit/node-elm-compiler` about versions apply here too: the
 `elm-version` in `elm.json` must match the compiler that the loader runs.
 
 ## Requirements
 
-Node 24, webpack 5, and Elm 0.19.1 or 0.19.2. The package is compiled to `dist/`
-and published as JavaScript.
+Node 24, webpack 5, and Elm 0.19.1, 0.19.2, or 0.19.3. The package is compiled
+to `dist/` and published as JavaScript.
 
 ## Thanks
 

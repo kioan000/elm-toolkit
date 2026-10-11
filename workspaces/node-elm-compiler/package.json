@@ -43,7 +43,7 @@
     "@elm-toolkit/cli-lib": "workspace:^"
   },
   "devDependencies": {
-    "elm": "^0.19.2-0",
+    "elm": "^0.19.3-0",
     "typescript": "^6.0.3"
   }
 }

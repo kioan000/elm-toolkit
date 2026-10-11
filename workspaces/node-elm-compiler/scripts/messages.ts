@@ -23,7 +23,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { CliError, type Result } from '@elm-toolkit/cli-lib'
+import { CliError, type Result, findElmBinary } from '@elm-toolkit/cli-lib'
 
 import * as legacy from '../index.ts'
 import {
@@ -37,9 +37,8 @@ import {
   findAllDependencies,
   prepareProcessArgs,
 } from '../result-api.ts'
-import { findElmBinary } from '../test/elm-binary.ts'
 
-const elm = findElmBinary()
+const elm = findElmBinary(import.meta.url)
 const app = path.join(import.meta.dirname, '..', 'test', 'fixtures', 'app')
 const inApp: CompilerOptions = { cwd: app, pathToElm: elm }
 const scratch = mkdtempSync(path.join(tmpdir(), 'node-elm-compiler-messages-'))
