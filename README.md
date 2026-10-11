@@ -7,10 +7,24 @@ The guiding principle is **minimal dependencies**: every package here aims for
 the smallest possible footprint, leaning on the standard library and native
 Node features whenever possible.
 
-Each workspace under `workspaces/` is a package of its own, with its own README.
-The packages are not on the npm registry yet. Each release on GitHub carries them
-as archives instead, as
-[Installing from a release](#installing-from-a-release) explains.
+## Packages
+
+Each package has a README that explains how to use it.
+
+| Package                                                                             | What it does                                                                                                                   |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`webpack-elm-loader`](workspaces/webpack-elm-loader)                               | Compiles Elm modules in webpack, with hot reloading that keeps the state of your app in development.                           |
+| [`webpack-elm-kernel-patcher-plugin`](workspaces/webpack-elm-kernel-patcher-plugin) | Applies patches to the Elm kernel packages before webpack compiles, for example the hot reloading of `elm/core`.               |
+| [`cli-elm-kernel-patcher`](workspaces/cli-elm-kernel-patcher)                       | The same patching as a command and a library, and the `archive` commands that build patches from Git commits.                  |
+| [`node-elm-compiler`](workspaces/node-elm-compiler)                                 | Runs the Elm compiler from Node, with an API that returns every failure as a value. A rewrite of the package of the same name. |
+| [`elm-node-runner`](workspaces/elm-node-runner)                                     | Runs a headless Elm program in Node, from the command line or from code.                                                       |
+| [`cli-lib`](workspaces/cli-lib)                                                     | `Maybe`, `Result`, and readable error messages for command line programs. Every other package uses it.                         |
+
+The packages are not on the npm registry yet. Each release on GitHub carries
+them as archives instead, as [Installing from a release](#installing-from-a-release)
+explains. [CHANGELOG.md](CHANGELOG.md) lists what changed in each release, and
+[UPGRADING.md](UPGRADING.md) what to edit in your project when you move to a new
+version.
 
 ## Installing from a release
 
@@ -114,6 +128,15 @@ A package whose test files compile the same test project runs those files one
 at a time, with `--test-concurrency=1`. Elm 0.19.1 corrupts the cache in
 `elm-stuff/` when two builds of one project run at once.
 
+Two scripts print every message that a user can see, to read them all after a
+change to a message: each error and log line of `node-elm-compiler`, and the
+output of the `elm-node-runner` command in every case.
+
+```sh
+corepack yarn workspace @elm-toolkit/node-elm-compiler messages
+corepack yarn workspace @elm-toolkit/elm-node-runner messages
+```
+
 ## Publishing
 
 Every published entry point must be compiled JavaScript. Node 24 strips
@@ -150,9 +173,11 @@ left side of the map and `types` and `default` on the right.
 ### Making a release
 
 Every pull request that changes a published package adds a line under
-`Unreleased` in [CHANGELOG.md](CHANGELOG.md). To release, rename that section to
+`Unreleased` in [CHANGELOG.md](CHANGELOG.md), and a breaking change also adds
+its steps to [UPGRADING.md](UPGRADING.md). To release, rename that section to
 the new version and the date, add an empty `Unreleased` above it, and update the
-links at the bottom of the file. Set the new versions in the manifests, merge
+links at the bottom of the file. In `UPGRADING.md`, the section for the new
+version must already have its final title, because the changelog links to it. Set the new versions in the manifests, merge
 both changes into `main`, then tag that commit and push the tag:
 
 ```sh

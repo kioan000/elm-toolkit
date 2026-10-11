@@ -142,5 +142,8 @@ maintainer decide.
 
 A pull request that changes a published package adds its entry under
 `Unreleased` in `CHANGELOG.md`. Write the entry for the people who use the
-package: what changed for them, and what they must change in their setup. The
-root README describes the release steps.
+package: what changed for them. When they must change their setup, the steps
+and the diffs go in `UPGRADING.md`, under the section of the next version, and
+the changelog entry links to it with a full URL, because the notes of a GitHub
+release do not resolve relative links. The root README describes the release
+steps.

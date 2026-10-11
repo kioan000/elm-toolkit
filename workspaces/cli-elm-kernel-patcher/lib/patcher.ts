@@ -37,7 +37,7 @@ const __dirname = import.meta.dirname
 
 /**
  * The Elm versions the patches are known to work with, each mapped to the
- * archive that holds its patches. The same patches work on 0.19.1, 0.19.2 and
+ * archive that holds its patches. The same patches work on 0.19.1, 0.19.2, and
  * 0.19.3, so they use one archive; a version that needs other patches gets an
  * archive of its own here. A project on a version that is not listed is refused.
  */
@@ -79,10 +79,16 @@ export type PatchOptions = {
 }
 
 /**
- * Every path one patching run needs, as produced by `prepareArgs`.
+ * Every path one patching run needs, as `prepareArgs` produces it. Print it to
+ * see which folders a run is about to read and write.
  *
- * The values are read only inputs. Printing this value is the quickest way to see
- * which folders a run is about to read and write.
+ * @example
+ *
+ * See where a run will copy the patched packages
+ * ```TypeScript
+ *   prepareArgs({ elmJsonFolder: 'frontend' }).map((args) => args.ELM_HOME_PACKAGES)
+ *   // Ok '/home/me/.elm/0.19.3/packages'
+ * ```
  */
 export type ReplaceKernelArgs = {
   ELM_HOME: string

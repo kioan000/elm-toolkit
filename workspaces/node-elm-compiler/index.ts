@@ -6,7 +6,8 @@
  * fails, as the original did. The API at `@elm-toolkit/node-elm-compiler/result-api`
  * has the same names and options, and returns each failure as a `Result`
  * instead; it also adds `dryCompile`, which checks a program without writing
- * any output. The functions here are thin wrappers around it: they call the
+ * any output, and `compileRunnableProgram`, which compiles a program for the
+ * caller to start. The functions here are thin wrappers around it: they call the
  * new function and turn its error back into the message that the original
  * threw.
  *

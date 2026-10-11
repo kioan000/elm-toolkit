@@ -50,15 +50,16 @@ CI checks the archive against the manifest on every pull request that touches
 them, and once a week, to notice a commit that is no longer reachable.
 
 The way the patches are applied comes from lydell too. The patching routine
-follows `replace-kernel-packages.mjs`, the script that he publishes with
+follows `replace-kernel-packages.mjs`, the script that lydell publishes with
 [elm-safe-virtual-dom](https://github.com/lydell/elm-safe-virtual-dom), together
 with a long and careful explanation of how Elm uses `ELM_HOME`. This adapted
 version is published with his permission. Thank you, Simon, for the forks, the
 script and the explanation.
 
 The forks are based on the `elm/core`, `elm/virtual-dom`, `elm/browser` and
-`elm/html` packages by Evan Czaplicki, and they keep his license. The license texts are
-in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+`elm/html` packages by Evan Czaplicki, and they keep the license of those
+packages. The license texts are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Usage
 
@@ -171,8 +172,8 @@ carries its own version, and it must match the version that `elm.json` pins.
 So a patch never applies to another version of a kernel package.
 
 A new Elm version is supported by adding it to that list in `lib/patcher.ts`,
-together with the patch archive it needs. Today both versions use the same
-archive.
+together with the patch archive it needs. Today every supported version uses the
+same archive.
 
 Then it reads the direct and indirect dependencies from `elm.json`. For every
 patched package it finds, it checks that the version matches the pinned one and
@@ -189,26 +190,37 @@ compile again from the new sources.
 
 ## Using it as a library
 
-The patching routines are also importable, for a script that needs them without
-the command line interface.
+The patcher is also a library, for a script that needs it without the command
+line. `patchKernel` does what the command does: it patches, prints the
+progress and the outcome, and returns a `Result`.
+
+```ts
+import { patchKernel } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
+
+const patchKernelResult = patchKernel({ elmJsonFolder: 'frontend', patches: 'elm-kernel-patcher' })
+
+if (patchKernelResult.type_ === 'Err') {
+  process.exitCode = 1
+}
+```
+
+To print nothing, or to look at the paths first, call the two steps that
+`patchKernel` runs. `prepareArgs` finds the paths, and `replaceKernelPackages`
+patches:
 
 ```ts
 import { prepareArgs, replaceKernelPackages } from '@elm-toolkit/cli-elm-kernel-patcher/patcher'
 
-replaceKernelPackages(
-  prepareArgs({
-    elmJsonFolder: 'yourprj/frontend',
-    patches: 'kernel-patches/patches.tar.gz',
-  })
-)
+const patchResult = prepareArgs({ elmJsonFolder: 'frontend' }).andThen(replaceKernelPackages)
 ```
 
-The archive builder is importable too, with the same steps as the commands:
+The archive builder is a library too, with one function for each command:
+`initManifest`, `buildArchive`, and `checkArchive`.
 
 ```ts
-import { buildArchive, checkArchive } from '@elm-toolkit/cli-elm-kernel-patcher/archive-builder'
+import { buildArchive } from '@elm-toolkit/cli-elm-kernel-patcher/archive-builder'
 
-buildArchive({ elmJsonFolder: 'frontend' })
+const buildArchiveResult = buildArchive({ elmJsonFolder: 'frontend' })
 ```
 
 ## Requirements
@@ -216,18 +228,6 @@ buildArchive({ elmJsonFolder: 'frontend' })
 Node 24, an Elm project with a valid `elm.json`, and `tar` on the `PATH` when the
 patches come from an archive. With the bundled patches, the project uses Elm
 0.19.1, 0.19.2, or 0.19.3. The `archive` commands also need `git`.
-
-The package installs one executable, which runs the compiled JavaScript in
-`dist/`. Node refuses to strip TypeScript types from files under `node_modules`,
-so an installed package cannot run its TypeScript sources. Inside this monorepo
-the sources can be run directly during development:
-
-```sh
-corepack yarn workspace @elm-toolkit/cli-elm-kernel-patcher dev --help
-```
-
-In a fresh clone the executable is linked only after the second install. The
-root README explains why.
 
 ## License
 

@@ -8,286 +8,236 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
-### Breaking changes
+### What's new
 
-- **The functions of `./runner` return a `Result`**
+This alpha is about two things: a better API for people who build tools on top
+of Elm, and hot reloading that keeps the state of your app, thanks to the
+kernel patches of [lydell](https://github.com/lydell).
+Some APIs change, and [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3) shows what to edit in your
+project.
 
-  `@elm-toolkit/elm-node-runner`: `compileProgram`, `startMain` and `runElm` no
-  longer throw or reject. Each one returns a `Result` with a `RunnerError`.
-  `RunnerError.title` says in a few words what went wrong, and
-  `RunnerError.toCliError` describes the failure for a person. `startProgram`
-  starts a compiled program, with a launcher or with `Main`. In
-  `ElmNamespace`, a module that the build does not have is `undefined`.
+**For tool authors: a Result API.** `node-elm-compiler` and `elm-node-runner`
+now have an API that never throws. Every function returns a `Result`, and every
+error tells you what happened: the output of Elm when the code does not
+compile, the system error when the compiler is missing, the exception when a
+program crashes while it loads. Handle the cases you care about, and print the
+rest.
 
-  **How to fix:** read the `Result` where the old code caught an exception.
+```ts
+const result = await dryCompile('src/Main.elm', { cwd: 'frontend' })
 
-  ```diff
-  -try {
-  -  await runElm({ elmFiles: ['src/Main.elm'] })
-  -} catch (error) {
-  -  console.error(error)
-  -}
-  +const runElmResult = await runElm({ elmFiles: ['src/Main.elm'] })
-  +
-  +if (runElmResult.type_ === 'Err') {
-  +  CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
-  +}
-  ```
+if (result.type_ === 'Err' && result.error.type_ === 'CompileFailed') {
+  showInTheBrowser(result.error.output)
+}
+```
 
-- **The `./hot` subpath is removed**
+You can also split compiling from running: `compileRunnableProgram` gives you
+the compiled program, and you decide when to load it, which module to start,
+and with which flags.
 
-  `@elm-toolkit/webpack-elm-loader`: the hot loader no longer exists. The Elm
-  loader adds hot module replacement itself, in development mode.
+**Hot reloading that keeps your state.** Save an Elm file, and the running page
+updates in place. With the patched `elm/core` of lydell, from
+[elm/core#1155](https://github.com/elm/core/pull/1155), which now ships with the
+kernel patcher, a `Browser.application` keeps its model: you stay on the same
+screen, with the same data. The loader enables this in development by itself,
+and the separate hot loader, `./hot`, is removed: [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3) shows the
+change in your webpack configuration.
 
-  **How to fix:** remove the hot loader from `use`.
+**Kernel patches from any Git commit.** A fix in the kernel code of
+`elm/core`, `elm/browser`, or `elm/virtual-dom` reaches your project only with a
+new release of that package. The kernel patcher now builds patches from forks
+that you choose: name a package, a Git repository, and a commit in a small
+manifest, and `archive build` packs them into an archive, with the `LICENSE` of
+each fork. Give the folder to the plugin, and every build uses your patches.
+Your editor checks the manifest against its JSON schema, and `archive check`
+tells CI when the archive no longer matches the manifest. The bundled patches
+are built the same way.
 
-  ```diff
-  -use: [
-  -  { loader: '@elm-toolkit/webpack-elm-loader/hot' },
-  -  { loader: '@elm-toolkit/webpack-elm-loader', options: { cwd: import.meta.dirname } },
-  -]
-  +use: { loader: '@elm-toolkit/webpack-elm-loader', options: { cwd: import.meta.dirname } }
-  ```
+```sh
+cli-elm-kernel-patcher archive init    # start from the manifest of the bundled patches
+cli-elm-kernel-patcher archive build   # fetch the commits and write patches.tar.gz
+cli-elm-kernel-patcher --patches elm-kernel-patcher
+```
 
-- **Development builds get hot module replacement by default**
+**Errors you can read.** Every command now says what broke in a few words, then
+what happened and how to fix it:
 
-  `@elm-toolkit/webpack-elm-loader`: in development mode the output now
-  contains the hot reloading code, also without the hot loader in the
-  configuration.
+```
+ERROR:Elm compiler not found "elm"
 
-  **How to fix:** nothing, in most projects, because the code runs only under
-  the development server. To keep the old output, set
-  `hotModuleReplacement: false` in the options of the loader.
+    How to fix:
+        Install Elm in the project with `npm install --save-dev elm`, …
+```
 
-- **The plugin is now `ElmKernelPatcherPlugin`**
+**Also in this release**
 
-  `@elm-toolkit/webpack-elm-kernel-patcher-plugin`: the class is now
-  `ElmKernelPatcherPlugin`, and its options type is
-  `ElmKernelPatcherPluginOptions`. The class is the default export, so an
-  `import` of it keeps working under any local name.
+- Keep the patched kernel out of production, with the new `elmHome` option.
+- Elm 0.19.3 works, and CI tests every package with 0.19.1, 0.19.2, and 0.19.3.
+- `cli-lib` exposes the `Maybe`, `Result`, and `CliError` that the toolkit
+  uses.
 
-  **How to fix:** change an import of the options type.
+### All changes
 
-  ```diff
-  -import type { ElmKernelReplacementPluginOptions } from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
-  +import type { ElmKernelPatcherPluginOptions } from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
-  ```
+Here is every change of this release, package by package. The packages that
+most projects use come first.
 
-- **`useArchive` is removed**
+#### webpack-elm-loader
 
-  `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `useArchive` and
-  `--useArchive` no longer exist. Patches of your own go in `patches`.
+**Breaking changes**
 
-  **How to fix:**
-  - With `useArchive: true`, the default, remove the option. The bundled
-    archive is used, as before.
-  - With `useArchive: false`, the patcher read a `patches/` folder inside its
-    installed package. Move that folder into the project and name it in
-    `patches`, relative to the folder that holds `elm.json`:
+- `./hot` is removed, and development builds get hot module replacement by
+  default. See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
 
-    ```diff
-    -new ElmKernelReplacementPlugin({ isEnabled: true, useArchive: false })
-    +new ElmKernelPatcherPlugin({ isEnabled: true, patches: 'kernel/patches' })
-    ```
+**Added**
 
-  - On the command line, `--useArchive false` becomes
-    `--patches kernel/patches`.
+- `hotModuleReplacement`, on by default when webpack runs in development mode.
+- Hot module replacement uses `Elm.hot.reload()` when the kernel offers it, as
+  the patched `elm/core` does. That is what keeps the state of your app.
+- `elmHome`, to compile against an Elm home of your choice. Without it, the
+  loader uses `ELM_HOME`, or `~/.elm`.
 
-- **The patching routines take options and return a `Result`**
+**Changed**
 
-  `@elm-toolkit/cli-elm-kernel-patcher`: `prepareArgs` takes one options object
-  instead of two arguments. It and `replaceKernelPackages` return a `Result`
-  from `@elm-toolkit/cli-lib` instead of throwing. The value of `prepareArgs`
-  has `PATCHES` instead of `CURRENT`, `PATCH_ARCHIVE`, `PATCH_DIR` and
-  `USE_ARCHIVE`.
+- When the loader cannot read the imports of a file, you get a webpack warning
+  that says what went wrong, instead of a line on the console.
 
-  **How to fix:**
-  - Call `patchKernel`, which runs both steps and prints the outcome:
+#### webpack-elm-kernel-patcher-plugin
 
-    ```diff
-    -replaceKernelPackages(prepareArgs(true, 'frontend'))
-    +patchKernel({ elmJsonFolder: 'frontend' })
-    ```
+**Breaking changes**
 
-  - Instead of catching an error, check the `type_` of the result; an `Err`
-    holds a `CliError`, which `CliError.toString` turns into text.
-  - With `false` as the first argument, also add `patches`, as described above.
-  - Code that reads the returned paths reads `PATCHES` instead.
+- The plugin is now `ElmKernelPatcherPlugin`, `useArchive` is gone, and the
+  bundled patches include `elm/core`. See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
 
-- **The bundled patches include `elm/core`**
+**Added**
 
-  `@elm-toolkit/cli-elm-kernel-patcher`: the bundled patches now include
-  `elm/core` from [elm/core#1155](https://github.com/elm/core/pull/1155), with
-  matching `elm/browser` and `elm/virtual-dom`. Every build that compiles
-  against the patched Elm home uses them, also in production. The hot reloading
-  code is not in a build made with `--optimize`.
+- `isEnabled` also takes a function, which receives the webpack compiler.
+- `patches` and `elmHome`, the same options as in `cli-elm-kernel-patcher`.
 
-  **How to fix:** nothing, when the patched kernel may reach production builds.
-  To keep the official kernel there:
-  - patch only in development, into an Elm home of its own;
-  - compile from that Elm home only in development;
-  - before a production build on a machine where the plugin has run, remove the
-    `elm-stuff/<version>` folder of the project, because Elm reuses the
-    compiled package code that it keeps there.
+#### cli-elm-kernel-patcher
 
-  ```js
-  export default (env, { mode }) => {
-    const elmHome = mode === 'development' ? 'elm-home/elm-stuff' : undefined
+**Breaking changes**
 
-    return {
-      module: {
-        rules: [
-          {
-            test: /\.elm$/,
-            use: {
-              loader: '@elm-toolkit/webpack-elm-loader',
-              options: { cwd: import.meta.dirname, elmHome },
-            },
-          },
-        ],
-      },
-      plugins: [
-        new ElmKernelPatcherPlugin({
-          elmHome,
-          isEnabled: mode === 'development',
-        }),
-      ],
-    }
-  }
-  ```
+- `useArchive` is gone, `prepareArgs` and `replaceKernelPackages` take options
+  and return a `Result`, and the bundled patches include `elm/core`, from
+  [elm/core#1155](https://github.com/elm/core/pull/1155). See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
 
-### Added
+**Added**
 
-- Every package works with Elm 0.19.3. CI runs the whole test suite with Elm
-  0.19.1, 0.19.2, and 0.19.3.
-- `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: the bundled patches
-  accept a project on Elm 0.19.3. The patches are the same as for 0.19.1 and
-  0.19.2.
-- `@elm-toolkit/cli-lib`: `findElmBinary`, which finds the `elm` executable that
-  the calling package depends on. `ELM_TEST_BINARY` replaces it with another
-  one, for example to run tests with an older Elm.
-- `@elm-toolkit/cli-lib`: `Maybe` and `Result`, with the functions of the
-  modules of the same names in `elm/core` as methods, so that the steps read
-  from top to bottom: `Result.fromAttempt(read).map(parse).mapError(describe)`.
-  `Result.fromAttempt` turns an exception into an `Err`, and
-  `Result.fromPromise` turns a rejected promise into one. `CliError` and
-  `CliSuccess` describe the outcome of a command for a person, and their
-  `print` functions show it the way every command of the toolkit does. A
-  `CliError` can also carry the report of another program, such as a
-  compiler, which is shown under "Details:" as that program wrote it.
-- `@elm-toolkit/cli-lib`: `continuingSentence`, which lowers the first letter
-  of a text that continues a sentence, such as a message of the system after a
-  colon, and keeps proper nouns and words in capitals. `CliError.print` and
-  `CliSuccess.print` use it for the summary, which continues the sentence of
-  the title. `CliError.toString` takes the title too, for a text that has to
-  start with it, and `splitFirstLine` splits a message into the line of a
-  summary and the lines below it.
-- `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
-  home and prints the progress and the outcome, as the command does.
-- `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a
-  `.tar.gz` archive of a `patches/` folder, or the folder itself. Such patches
-  skip the check of the Elm version, and a wrong layout stops with the expected
-  one. Patches without `elm/virtual-dom` make Elm compile everything again at
-  each start.
-- `@elm-toolkit/cli-elm-kernel-patcher`, the plugin and
-  `@elm-toolkit/webpack-elm-loader`: an optional `elmHome`. Without it, each one
-  uses the `ELM_HOME` of the environment, or `~/.elm`.
-- `@elm-toolkit/webpack-elm-kernel-patcher-plugin`: `isEnabled` also takes a
-  function that receives the webpack compiler.
-- `@elm-toolkit/webpack-elm-loader`: hot module replacement uses
-  `Elm.hot.reload()` when the kernel offers it.
-- `@elm-toolkit/webpack-elm-loader`: the `hotModuleReplacement` option, which
-  defaults to the development mode of webpack.
-- `@elm-toolkit/cli-elm-kernel-patcher`: the `archive init`, `archive build` and
-  `archive check` commands, and the `./archive-builder` subpath. They keep a
-  manifest of Git commits and the archive built from it in one folder,
-  `elm-kernel-patcher/`, which `patches` accepts. A JSON schema of the manifest
-  lets editors complete and check it.
-- `@elm-toolkit/node-elm-compiler`: the `./result-api` subpath. It has the
-  functions of the root, with the same names and options, but each one returns
-  a `Result` with a `CompileError` instead of throwing.
-  `CompileError.title` says in a few words what went wrong, and
-  `CompileError.toCliError` adds the detail for a person. An error that comes
-  from an exception keeps it in `original`.
-- `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
-  that a program compiles, and writes no output.
-- `@elm-toolkit/node-elm-compiler`: `compileRunnableProgram`, in
-  `./result-api`. It compiles a program, and its `load` function runs the code
-  in the current process and returns the modules, without starting any of them.
-  A failure of `load` is a `LoadError`.
+- `patchKernel`: patches the Elm home and prints the outcome, like the command.
+- `patches` accepts a `.tar.gz` archive of a `patches/` folder, or the folder
+  itself. Your own patches skip the check of the Elm version, and a wrong
+  layout stops with the layout it expects. Patches without `elm/virtual-dom`
+  make Elm compile everything again at each start.
+- `elmHome`, to patch an Elm home of your choice. Without it, the patcher uses
+  `ELM_HOME`, or `~/.elm`.
+- `archive init`, `archive build`, and `archive check`, with the
+  `./archive-builder` subpath: they build your own patches from Git commits.
+  The manifest and the archive live together in `elm-kernel-patcher/`, which
+  `patches` accepts, and a JSON schema lets your editor complete and check the
+  manifest.
+- The bundled patches accept a project on Elm 0.19.3.
 
-### Changed
+**Changed**
 
-- `@elm-toolkit/cli-elm-kernel-patcher`: every outcome prints in one layout: a
-  highlighted line that says what happened, then the sections "What happened:",
-  "How to fix:" and "Next step:", each after a blank line. A suggested command
-  keeps the options that were used. The settings of a patch run print as
-  lines, and an error prints a stack trace only when it looks like a bug. A long
-  line continues on the next line, within the width of the terminal, and a
-  command between backticks stays on one line.
-- `@elm-toolkit/cli-elm-kernel-patcher`: an archive is extracted into a
-  temporary folder, not inside the installed package, so the patcher works when
-  `node_modules` is read only.
-- `@elm-toolkit/cli-elm-kernel-patcher`: each package in the bundled patches
-  carries the `LICENSE` of its fork. The archive is now built from
-  `lib/elm-kernel-patcher.json`, which names the commit of each package.
-- `@elm-toolkit/node-elm-compiler`: the package now depends on
-  `@elm-toolkit/cli-lib`.
-- `@elm-toolkit/node-elm-compiler`: `compileWorker` no longer prints the
-  messages of a failed build to the terminal. The error holds them instead.
-- `@elm-toolkit/node-elm-compiler`: `compileToString` keeps the `processOpts`
-  of the caller, such as `env`. Before, it replaced them.
-- `@elm-toolkit/node-elm-compiler`: some messages of the deprecated API say
-  more than before. Code that compares the text of an error must change:
-  - `compile` and `compileToString` with sources that are neither a string nor
-    a list throw a message that says so, instead of a message about the
-    compiler.
-  - A failed build of `compileToString` has only the problems that Elm
-    reports, without the progress lines, also in the `verbose` log.
-  - `compileWorker` names the compiler when it is not installed, instead of
-    `Errored with exit code -2`.
+- Every outcome prints in the same layout: a highlighted line that says what
+  happened, then "What happened:", "How to fix:", and "Next step:". A suggested
+  command keeps the options you used, and long lines wrap to your terminal.
+- Archives are extracted into a temporary folder, not inside the installed
+  package, so the patcher also works when `node_modules` is read only.
+- Each package in the bundled patches carries the `LICENSE` of its fork. The
+  archive is built from `lib/elm-kernel-patcher.json`, which names the commit
+  of each package.
+
+#### node-elm-compiler
+
+**Added**
+
+- `./result-api`: the same functions, with the same names and options, that
+  return a `Result` instead of throwing. Each error is a `CompileError`.
+  `CompileError.title` says what went wrong in a few words, `CompileError.toCliError`
+  adds the detail and the fix, and `original` keeps the exception behind it,
+  when there is one.
+- `dryCompile`: checks that your code compiles, without writing any file.
+- `compileRunnableProgram`: compiles a program for the current process, and
+  gives you a `load` function. `load` runs the code and returns the modules,
+  without starting any of them. If it fails, you get a `LoadError`.
+
+**Changed**
+
+- `compileWorker` no longer prints the messages of a failed build. You find them
+  in the error.
+- `compileToString` keeps your `processOpts`, such as `env`. It used to replace
+  them.
+- If you compare the text of errors from the deprecated API, some of them now
+  say more:
+  - sources that are neither a string nor a list get a message that says so,
+    not a message about the compiler;
+  - a failed `compileToString` holds only the problems that Elm reports, without
+    the progress lines, also in the `verbose` log;
+  - `compileWorker` names a compiler that is not installed, instead of
+    `Errored with exit code -2`;
   - `compileWorker` with a module whose name has a dot, such as `Tools.Echo`,
-    suggests its full name instead of `Tools`.
-- `@elm-toolkit/elm-node-runner`: the command no longer shows the messages of
-  Elm while it builds. A build that succeeds is reported before the program
-  starts. A failure prints one error in the layout of the toolkit, with a short
-  title that says what went wrong, such as `Elm code does not compile`, and the
-  problems of Elm under "Details:". It also reports a launcher that cannot be
-  imported or that throws, a program that fails while it loads, and a `Main`
-  whose `init` throws, where it used to print the bare exception.
-- `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
-  new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
-  imports of a file, webpack shows a warning in the layout of the toolkit,
-  instead of a line on the console.
+    suggests the full name, not `Tools`.
 
-### Deprecated
+**Deprecated**
 
-- `@elm-toolkit/node-elm-compiler`: the functions at the root of the package.
-  They keep working as before, and a later release will remove them.
+- The functions at the root of the package. See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
 
-  **How to fix:** import the same function from `./result-api`, and read the
-  `Result` instead of catching an exception. The README of the package lists
-  the functions whose result changed shape.
+**Fixed**
 
-  ```diff
-  -import { compileToString } from '@elm-toolkit/node-elm-compiler'
-  +import { compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
-  ```
+- The deprecated `findAllDependencies` rejects again when it cannot read the
+  entry file, or when the file has no valid module declaration, with the same
+  value as the original package. Since 0.1.0-alpha.1 it logged the problem and
+  returned what it knew, so a failed search looked like a module without
+  imports.
 
-- `@elm-toolkit/elm-node-runner`: the `--log-info` option. A failed build
-  already shows the messages of Elm in its error, so the option adds only the
-  compiler command. It still works, prints a warning, and a later release will
-  remove it.
+#### elm-node-runner
 
-  **How to fix:** remove `--log-info` from the scripts that start the runner.
+**Breaking changes**
 
-### Fixed
+- The functions of `./runner` return a `Result`. See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
 
-- `@elm-toolkit/node-elm-compiler`: the deprecated `findAllDependencies`
-  rejects again when the entry file cannot be read or does not start with a
-  valid module declaration, with the same value as the original package. Since
-  0.1.0-alpha.1 it logged the problem and returned the known dependencies, so a
-  caller could not tell a failed search from a module without imports.
+**Added**
+
+- `startProgram`: starts a compiled program, with your launcher or with `Main`.
+  Call it after `compileProgram` when you want to do something between the build
+  and the start.
+- `RunnerError.title` and `RunnerError.toCliError`, to show a failure to a
+  person.
+
+**Changed**
+
+- The command tells you when the build succeeds, before your program starts,
+  and keeps the messages of Elm quiet while it builds.
+- When something fails, you get one error, with a title that says what went
+  wrong, such as `Elm code does not compile` or `launcher threw an error`. The
+  problems of Elm come under "Details:".
+- A launcher that cannot be imported or that throws, a program that crashes
+  while it loads, and a `Main` whose `init` throws now get a proper error. They
+  used to print the bare exception.
+
+**Deprecated**
+
+- The `--log-info` option. See [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha2-to-010-alpha3).
+
+#### cli-lib
+
+**Added**
+
+- `Maybe` and `Result`, with the functions of `elm/core` as methods, so your
+  steps read from top to bottom:
+  `Result.fromAttempt(read).map(parse).mapError(describe)`.
+  `Result.fromAttempt` turns an exception into an `Err`, and
+  `Result.fromPromise` does the same for a rejected promise.
+- `CliError` and `CliSuccess`, to print the outcome of a command like every
+  command of the toolkit does: a highlighted title, a summary that continues
+  it, and sections below. A `CliError` can carry the report of another program,
+  such as a compiler, under "Details:".
+- `continuingSentence`, `splitFirstLine`, and an optional title for
+  `CliError.toString`, for commands that write their own messages.
+- `findElmBinary`: finds the `elm` executable that your package depends on.
+  Set `ELM_TEST_BINARY` to use another one, for example to run your tests with
+  an older Elm.
 
 ## [0.1.0-alpha.2] - 2026-10-02
 

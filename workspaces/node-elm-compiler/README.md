@@ -15,7 +15,11 @@ The package has two entry points, with the same function names and the same
 options.
 
 - `@elm-toolkit/node-elm-compiler/result-api` returns every failure as a
-  `Result`, with a `CompileError` that a caller can inspect. Use it in new code.
+  `Result`, with a `CompileError` that a caller can inspect. Use it in new code,
+  and above all in a tool: each step of a build is a function of its own, and
+  each failure is a value that carries its facts, from the messages of Elm to
+  the exception of the system, so a tool can handle one case and report the
+  others.
 - `@elm-toolkit/node-elm-compiler` is the API of the original packages, so code
   written for `node-elm-compiler` works with it. It throws or rejects when
   something fails. It is deprecated, and a later release will remove it.
@@ -48,10 +52,10 @@ switch (compileToStringResult.type_) {
 
 `CompileError.title` says in a few words what went wrong, and
 `CompileError.toCliError` adds the detail and the next step when there is one.
-`CliError.print` shows the title highlighted, followed by the rest. A caller can also read `error.type_` and react to
-one case, for example show the messages of a failed build in the browser. An
-error that comes from an exception keeps the exception in `original`, with its
-stack and its system code.
+`CliError.print` shows the title highlighted, followed by the rest. A caller can
+also read `error.type_` and react to one case, for example show the messages of
+a failed build in the browser. An error that comes from an exception keeps the
+exception in `original`, with its stack and its system code.
 
 `compile` runs `elm make` as a child process and returns that process, for a
 caller that wants the exit code or the streams. Both functions have a `Sync`
@@ -93,6 +97,13 @@ const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.e
 `compileWorker` compiles a headless Elm program and starts it in the current
 process. Tools written in Elm use it to exchange data with Node through ports.
 
+```ts
+import { compileWorker } from '@elm-toolkit/node-elm-compiler/result-api'
+
+const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+// Ok { ports: { input, output } }, or Err with a CompileError
+```
+
 `compileRunnableProgram` does the first half of that work. It compiles a
 program and returns it with a `load` function, which runs the compiled code in
 the current process and returns its modules, without starting any of them. The
@@ -102,12 +113,13 @@ gives a new instance of the program, and nothing becomes global.
 ```ts
 import { compileRunnableProgram } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const compileRunnableProgramResult = await compileRunnableProgram(['src/Main.elm'], { optimize: true })
-// Ok { javascript, load }, or Err with a CompileError
+const compileRunnableProgramResult = await
+compileRunnableProgram(['src/Main.elm'], { optimize: true }) // Ok { javascript,
+load }, or Err with a CompileError
 
-if (compileRunnableProgramResult.type_ === 'Ok') {
-  const loadResult = compileRunnableProgramResult.value.load()
-  // Ok { Main: { init } }, or Err with a LoadError when the code throws while it loads
+if (compileRunnableProgramResult.type_ === 'Ok') { const loadResult =
+compileRunnableProgramResult.value.load() // Ok { Main: { init } }, or Err with
+a LoadError when the code throws while it loads
 
   loadResult.map((elm) => elm.Main?.init({ flags: { name: 'Ada' } }))
 }
@@ -154,8 +166,7 @@ Some results changed shape:
 ## Compatibility
 
 The package works with Elm 0.19.1, 0.19.2, and 0.19.3. CI runs the whole test
-suite with each of them. Locally the tests run Elm 0.19.3, from the `elm` npm
-package, and `ELM_TEST_BINARY` makes them run another compiler.
+suite with each of them.
 
 The compiler version and the project must agree. Elm 0.19.3 refuses an
 application whose `elm.json` declares `"elm-version": "0.19.2"`, and the other
@@ -199,22 +210,14 @@ one of the other checks fail, it breaks code written for the original package.
 
 ## Requirements
 
-Node 24, and an `elm` binary on the `PATH` or given with `pathToElm`. The package
-is compiled to `dist/` and published as JavaScript.
-
-Inside this monorepo, a script prints every message of the package, each error
-as a command line tool prints it and every line that reaches the console. Run it
-after a change to a message, to read the result:
-
-```sh
-corepack yarn workspace @elm-toolkit/node-elm-compiler messages
-```
+Node 24, and an `elm` binary on the `PATH` or given with `pathToElm`.
 
 ## Thanks
 
 This package stands on the work of Richard Feldman and of everyone who
-contributed to [`node-elm-compiler`](https://github.com/rtfeldman/node-elm-compiler)
-and [`find-elm-dependencies`](https://github.com/noredink/find-elm-dependencies).
+contributed to
+[`node-elm-compiler`](https://github.com/rtfeldman/node-elm-compiler) and
+[`find-elm-dependencies`](https://github.com/noredink/find-elm-dependencies).
 They designed the API, found and solved the hard cases of running the Elm
 compiler from Node, and kept these tools working for the Elm community since 2015. This package is a full rewrite in TypeScript, but its old API keeps
 theirs, with the shape of many of their functions and their error messages.
@@ -227,4 +230,5 @@ The contributors are listed on GitHub:
 ## License
 
 BSD-3-Clause, copyright kioan000. The code that comes from the projects above
-keeps the notice of its authors, in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+keeps the notice of its authors, in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

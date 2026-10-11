@@ -85,7 +85,10 @@ or formatted with the rest of the repository.
 An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
 reloads itself: a development build offers `Elm.hot.reload()`. When that is
 there, the loader passes each new version of the code to it, and the elm-hot
-runtime stays off. Otherwise the elm-hot runtime does the work, as before.
+runtime stays off. Otherwise the elm-hot runtime does the work, as before. To
+get that `elm/core`, add
+[`@elm-toolkit/webpack-elm-kernel-patcher-plugin`](https://github.com/kioan000/elm-toolkit/tree/main/workspaces/webpack-elm-kernel-patcher-plugin)
+to the configuration, and give the loader the same `elmHome`.
 
 ## Compatibility
 
@@ -103,8 +106,7 @@ The rules of `@elm-toolkit/node-elm-compiler` about versions apply here too: the
 
 ## Requirements
 
-Node 24, webpack 5, and Elm 0.19.1, 0.19.2, or 0.19.3. The package is compiled
-to `dist/` and published as JavaScript.
+Node 24, webpack 5, and Elm 0.19.1, 0.19.2, or 0.19.3.
 
 ## Thanks
 
@@ -122,6 +124,9 @@ it. Thank you to all of them.
   piece of work, and the loader here reuses it almost unchanged.
 - Flux Xu wrote [`elm-hot-loader`](https://github.com/fluxxu/elm-hot-loader),
   the work that `elm-hot` is based on.
+- [lydell](https://github.com/lydell) wrote the patch of `elm/core` that offers
+  `Elm.hot.reload()`, [elm/core#1155](https://github.com/elm/core/pull/1155),
+  with which the loader reloads an application through Elm itself.
 
 ## License
 
