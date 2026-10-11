@@ -26,7 +26,7 @@ export default {
 }
 ```
 
-`isEnabled` turns the plugin on. It is a boolean, or a function that receives
+`isEnabled` enables the plugin. It is a boolean, or a function that receives
 the webpack compiler and decides when webpack starts, once the configuration,
 mode included, is complete. When it is `false`, the plugin does nothing.
 
@@ -70,8 +70,7 @@ clean checkout, as in CI, does not need this.
 
 Node 24, webpack 5, and an Elm project on a version that the patcher supports,
 today 0.19.1, 0.19.2, or 0.19.3. On another version the plugin stops the build
-before anything changes. The package is compiled to `dist/` and published as
-JavaScript.
+before anything changes.
 
 ## Thanks
 

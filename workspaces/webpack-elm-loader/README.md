@@ -47,6 +47,42 @@ In watch mode the loader reports every local module that the entry imports, so a
 change in any of them starts a new build. With `cwd`, it also watches `elm.json`
 and each source directory, so a new file is noticed too.
 
+## Typed configuration
+
+In a rule, webpack finds a loader by its package name or by its path, as with
+`require.resolve('./my-loader')`, and loads the module itself. The rule never
+holds the loader function, so TypeScript cannot check the loader. It can check
+its options: give them the type `ElmLoaderOptions`, and a misspelled option,
+such as `optimise`, is an error in your editor. The plugin of the kernel
+patcher is a class that you create, so its options are checked too.
+
+```ts
+// webpack.config.ts
+import type { Configuration } from 'webpack'
+import ElmKernelPatcherPlugin from '@elm-toolkit/webpack-elm-kernel-patcher-plugin'
+import type { ElmLoaderOptions } from '@elm-toolkit/webpack-elm-loader'
+
+const elmLoaderOptions: ElmLoaderOptions = { cwd: import.meta.dirname, elmHome: 'elm-home/elm-stuff' }
+
+export default {
+  module: {
+    rules: [
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        use: { loader: '@elm-toolkit/webpack-elm-loader', options: elmLoaderOptions },
+      },
+    ],
+  },
+  plugins: [
+    new ElmKernelPatcherPlugin({
+      elmHome: 'elm-home/elm-stuff',
+      isEnabled: (compiler) => compiler.options.mode === 'development',
+    }),
+  ],
+} satisfies Configuration
+```
+
 ## Reloading in place
 
 In development mode the loader adds hot module replacement to the compiled code.
@@ -85,7 +121,10 @@ or formatted with the rest of the repository.
 An `elm/core` patched with [elm/core#1155](https://github.com/elm/core/pull/1155)
 reloads itself: a development build offers `Elm.hot.reload()`. When that is
 there, the loader passes each new version of the code to it, and the elm-hot
-runtime stays off. Otherwise the elm-hot runtime does the work, as before.
+runtime stays off. Otherwise the elm-hot runtime does the work, as before. To
+get that `elm/core`, add
+[`@elm-toolkit/webpack-elm-kernel-patcher-plugin`](https://github.com/kioan000/elm-toolkit/tree/main/workspaces/webpack-elm-kernel-patcher-plugin)
+to the configuration, and give the loader the same `elmHome`.
 
 ## Compatibility
 
@@ -103,8 +142,7 @@ The rules of `@elm-toolkit/node-elm-compiler` about versions apply here too: the
 
 ## Requirements
 
-Node 24, webpack 5, and Elm 0.19.1, 0.19.2, or 0.19.3. The package is compiled
-to `dist/` and published as JavaScript.
+Node 24, webpack 5, and Elm 0.19.1, 0.19.2, or 0.19.3.
 
 ## Thanks
 
@@ -122,6 +160,9 @@ it. Thank you to all of them.
   piece of work, and the loader here reuses it almost unchanged.
 - Flux Xu wrote [`elm-hot-loader`](https://github.com/fluxxu/elm-hot-loader),
   the work that `elm-hot` is based on.
+- [lydell](https://github.com/lydell) wrote the patch of `elm/core` that offers
+  `Elm.hot.reload()`, [elm/core#1155](https://github.com/elm/core/pull/1155),
+  with which the loader reloads an application through Elm itself.
 
 ## License
 

@@ -4,8 +4,9 @@
  *
  * The functions have the names of the original API of this package, at its
  * root, and the same options; only the way they report a failure differs. A
- * failure is a `CompileError`, a value with a `type_` that a caller can inspect,
- * and `CompileError.toCliError` turns it into a message for a person.
+ * failure is a `CompileError`, a value with a `type_` that a caller can inspect.
+ * `CompileError.title` says in a few words what went wrong, and
+ * `CompileError.toCliError` turns it into a message for a person.
  *
  * Start with `compileToString`, which returns the generated JavaScript, and
  * `dryCompile`, which only checks that the program compiles. `compile` returns

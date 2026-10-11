@@ -1,20 +1,20 @@
 /**
- * Utilities shared by the command line tools in this repository.
+ * The library that every tool of the toolkit is built on, for command line
+ * programs and build tools written in TypeScript.
  *
- * The module covers three needs that every one of those tools runs into. The
- * logging helpers make progress visible in a terminal. `spawnCommand` runs
- * another program and keeps its output attached to the current process. The last
- * pair answers questions a module has about itself: whether it was started by
- * Node or imported, and where its own manifest is.
+ * Start with `Maybe` and `Result`, the types of the same names from `elm/core`,
+ * with their functions. A step that can fail returns a `Result` with a
+ * `CliError` instead of throwing, and the function that runs a command prints
+ * that error once, with `CliError.print`. `CliSuccess` does the same for a
+ * command that worked, and `continuingSentence` and `splitFirstLine` help to
+ * write the text of a message.
  *
- * The self inspection functions take the caller's `import.meta.url`, because
- * the answer concerns the calling module and not this one. `findElmBinary` does
- * the same, to find the Elm compiler that the calling package pins.
- *
- * `Maybe` and `Result` bring the types of the same names from `elm/core`, with
- * their functions. A step that can fail returns a `Result` with a `CliError`
- * instead of throwing, and the function that runs a command prints that error
- * once, with `CliError.print`.
+ * The rest covers smaller needs. The `pretty` helpers print one highlighted
+ * line of progress. `spawnCommand` runs another program and keeps its output
+ * attached to the current process. `isEntryPoint`, `readPackageJson`, and
+ * `findElmBinary` answer questions that a module asks about itself, so they take
+ * the caller's `import.meta.url`: whether Node started it, where its manifest
+ * is, and which Elm compiler its package pins.
  *
  * @packageDocumentation
  */

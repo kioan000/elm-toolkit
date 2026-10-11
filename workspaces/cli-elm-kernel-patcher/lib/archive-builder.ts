@@ -22,7 +22,7 @@
  * decide whether an Elm home is already patched.
  *
  * Every step below the three functions returns a `Result` with a `CliError`,
- * and never throws: a call of Node runs inside `Result.attempt`, and its
+ * and never throws: a call of Node runs inside `Result.fromAttempt`, and its
  * exception becomes a `CliError` that says what failed. The three functions
  * chain the steps, print the progress and the outcome once, and return the
  * `Result`, so that a command only has to set its exit code.
@@ -38,10 +38,28 @@ import { CliError, CliSuccess, Result, prettyInfo } from '@elm-toolkit/cli-lib'
 
 import { archiveCommand, inWorkFolder, patchCommand, report, shown } from './steps.ts'
 
-/** The name of the manifest inside a patch folder. */
+/**
+ * The name of the manifest inside a patch folder.
+ *
+ * @example
+ *
+ * Read the manifest of a patch folder
+ * ```TypeScript
+ *   readFileSync(path.join('elm-kernel-patcher', manifestName), 'utf8')
+ * ```
+ */
 export const manifestName = 'elm-kernel-patcher.json'
 
-/** The name of the archive inside a patch folder. */
+/**
+ * The name of the archive inside a patch folder.
+ *
+ * @example
+ *
+ * Check that a patch folder holds a built archive
+ * ```TypeScript
+ *   existsSync(path.join('elm-kernel-patcher', archiveName))
+ * ```
+ */
 export const archiveName = 'patches.tar.gz'
 
 // The build copies the manifest next to the compiled module, as it does with the archive.

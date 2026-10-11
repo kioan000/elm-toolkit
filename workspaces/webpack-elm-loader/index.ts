@@ -32,20 +32,48 @@ import { inject } from './hot/inject.ts'
 type PromiseResult = { result: string | boolean; type_: 'Success' } | { error: unknown; type_: 'Error' }
 
 /**
- * Webpack loader options for Elm compilation.
+ * The options of the loader, for a typed webpack configuration. A rule names
+ * the loader by its package name or path, and webpack loads the module itself,
+ * so the options are the part that TypeScript can check: give them this type,
+ * and a misspelled option is an error in the editor. Every option is optional.
+ *
+ * @example
+ *
+ * Type the options of the loader in `webpack.config.ts`
+ * ```TypeScript
+ *   const elmLoaderOptions: ElmLoaderOptions = { cwd: import.meta.dirname, optimize: true }
+ *
+ *   export default {
+ *     module: { rules: [{ test: /\.elm$/, use: { loader: '@elm-toolkit/webpack-elm-loader', options: elmLoaderOptions } }] },
+ *   } satisfies Configuration
+ * ```
  */
-interface ElmLoaderOptions {
-  [key: string]: unknown
+export interface ElmLoaderOptions {
+  /** The folder where Elm runs, and where it looks for `elm.json`. In watch mode, also the folder whose `elm.json` and source directories are watched. */
   cwd?: string
+  /** Adds the Elm debugger, with `--debug`. On by default in development mode. */
   debug?: boolean
+  /** The `ELM_HOME` of the compiler, relative to `cwd`. Without it, Elm uses the `ELM_HOME` of the environment, or `~/.elm`. */
   elmHome?: string
+  /** The modules to compile into one bundle, instead of the module that webpack asks for. */
   files?: string[]
+  /** Adds hot module replacement to the output. On by default in development mode. */
   hotModuleReplacement?: boolean
+  /** Builds with `--optimize`. On by default in production mode. */
   optimize?: boolean
-  output?: string
+  /** The Elm binary to run, such as `node_modules/.bin/elm`. Without it, the `elm` on the `PATH`. */
   pathToElm?: string
+  /** The format of the report of Elm, passed to `--report`, such as `json`. */
   report?: string
+  /** Options for the runtime of the compiler, passed between `+RTS` and `-RTS`. */
+  runtimeOptions?: ReadonlyArray<string>
+  /** Prints the compiler command before it runs. */
+  verbose?: boolean
 }
+
+// What the loader reads: the options of the rule or of a query string, which can hold any key.
+// The compiler refuses a key that it does not know, so a misspelled option still stops the build.
+type ReceivedOptions = ElmLoaderOptions & { [key: string]: unknown; output?: string }
 
 /**
  * Get files to compile from loader options or use the resource path.
@@ -56,7 +84,7 @@ interface ElmLoaderOptions {
  *
  * @throws Error
  */
-function getFiles(context: LoaderContext<ElmLoaderOptions>, options: ElmLoaderOptions): string[] {
+function getFiles(context: LoaderContext<ReceivedOptions>, options: ReceivedOptions): string[] {
   const files = options?.files
 
   if (files === undefined) {
@@ -82,14 +110,14 @@ function getFiles(context: LoaderContext<ElmLoaderOptions>, options: ElmLoaderOp
  * @param context - Webpack loader context
  * @returns Parsed loader options
  */
-function parseLoaderOptions(context: LoaderContext<ElmLoaderOptions>): ElmLoaderOptions {
+function parseLoaderOptions(context: LoaderContext<ReceivedOptions>): ReceivedOptions {
   // The options come from the rule, as an object or a query string. The query of the requested
   // module, such as `./Main.elm?v=2`, belongs to the import and is not read.
   const query = context.query || ''
 
   // If query is already an object, return it directly
   if (typeof query === 'object') {
-    return query as ElmLoaderOptions
+    return query as ReceivedOptions
   }
 
   // Handle string queries
@@ -100,7 +128,7 @@ function parseLoaderOptions(context: LoaderContext<ElmLoaderOptions>): ElmLoader
   // Parse query string (e.g., "?debug=true&optimize=false")
   const cleanQuery = query.startsWith('?') ? query.slice(1) : query
   const params = new URLSearchParams(cleanQuery)
-  const options: ElmLoaderOptions = {}
+  const options: ReceivedOptions = {}
 
   for (const [key, value] of params) {
     if (value === 'true') {
@@ -125,8 +153,8 @@ function parseLoaderOptions(context: LoaderContext<ElmLoaderOptions>): ElmLoader
  * @param mode - Webpack build mode (development/production)
  * @returns Merged compiler options
  */
-function getOptions(context: LoaderContext<ElmLoaderOptions>, mode: string | undefined): ElmLoaderOptions {
-  const defaultOptions: ElmLoaderOptions = {
+function getOptions(context: LoaderContext<ReceivedOptions>, mode: string | undefined): ReceivedOptions {
+  const defaultOptions: ReceivedOptions = {
     debug: mode === 'development',
     hotModuleReplacement: mode === 'development',
     optimize: mode === 'production',
@@ -245,7 +273,7 @@ function getSuffix(outputPath: string | undefined, defaultSuffix: string): strin
  * @param options - Compiler options
  * @returns Promise resolving to compiled JavaScript
  */
-async function compileElm(sources: string[], options: ElmLoaderOptions): Promise<string> {
+async function compileElm(sources: string[], options: ReceivedOptions): Promise<string> {
   const suffix = getSuffix(options.output, '.js')
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'elm-webpack-'))
   const outputPath = path.join(tempDir, `elm-output${suffix}`)
@@ -332,7 +360,7 @@ async function compileElm(sources: string[], options: ElmLoaderOptions): Promise
  * @returns a promise that settles after the loader has passed the output, or the
  * error, to webpack
  */
-export default async function elmWebpackLoader(this: LoaderContext<ElmLoaderOptions>): Promise<void> {
+export default async function elmWebpackLoader(this: LoaderContext<ReceivedOptions>): Promise<void> {
   // Mark this loader as cacheable
   if (this.cacheable) {
     this.cacheable()
