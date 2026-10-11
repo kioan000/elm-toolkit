@@ -99,6 +99,21 @@ not rebuild anything, because Yarn treats the root `postinstall` as already done
 Run `corepack yarn clean` and then `corepack yarn build`, which ignores both
 caches.
 
+## Tests
+
+```sh
+corepack yarn test
+```
+
+The tests run the real Elm compiler, the one that the `elm` dev dependency pins.
+`ELM_TEST_BINARY` makes them run another one, and the test projects must then
+declare its version in `elm.json`. CI runs every test suite once for each Elm
+version that the toolkit supports, this way.
+
+A package whose test files compile the same test project runs those files one
+at a time, with `--test-concurrency=1`. Elm 0.19.1 corrupts the cache in
+`elm-stuff/` when two builds of one project run at once.
+
 ## Publishing
 
 Every published entry point must be compiled JavaScript. Node 24 strips

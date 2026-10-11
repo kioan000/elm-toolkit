@@ -4,8 +4,8 @@
  * `RunnerError` has a check.
  *
  * The tests run in the fixture project with the pinned Elm first on the `PATH`.
- * Temporary folders go to a private folder, so the check of their removal does
- * not see the folders of the command tests, which run in parallel.
+ * Temporary folders go to a private folder, so the check of their removal sees
+ * only the folders of this file.
  *
  * @packageDocumentation
  */
