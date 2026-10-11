@@ -131,11 +131,10 @@ describe('findAllDependencies', () => {
     assert.deepEqual(dependencies, [known])
   })
 
-  it('returns the known dependencies and logs the problem when the file does not exist', async (t) => {
+  it('rejects with the error of the file system when the file does not exist, and logs nothing', async (t) => {
     const logged = t.mock.method(console, 'error', () => undefined)
-    const dependencies = await findAllDependencies(source('src/Missing.elm'))
 
-    assert.deepEqual(dependencies, [])
-    assert.equal(logged.mock.callCount(), 1)
+    await assert.rejects(findAllDependencies(source('src/Missing.elm')), { code: 'ENOENT' })
+    assert.equal(logged.mock.callCount(), 0)
   })
 })

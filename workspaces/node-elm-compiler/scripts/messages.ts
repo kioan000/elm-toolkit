@@ -3,7 +3,7 @@
  * one place, for example after a change to a message or during a review.
  *
  * The first part prints each case of `CompileError` as a command line tool
- * prints it, with `CliError.print`. The second part runs each path that writes
+ * prints it, with its title and `CliError.print`. The second part runs each path that writes
  * to the console: the log of `verbose`, the warnings about `elm.json`, the
  * error of the deprecated `findAllDependencies`, and the lines that Elm itself
  * prints. Every case comes from a real call on the projects in
@@ -227,10 +227,24 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
   ],
   ['ModuleNotFound', async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 }))],
   [
+    'ModuleNotFound: a module whose name has a dot',
+    async (): Promise<CompileError> => errorOf(await startWorker('Tools/Echo', 'Tools.Echo')),
+  ],
+  [
     'WorkerNotStarted',
     async (): Promise<CompileError> => errorOf(await startWorker('Doubler', 'Doubler', { flags: 'three' })),
   ],
   ['NoPorts', async (): Promise<CompileError> => errorOf(await startWorker('NoPorts', 'NoPorts'))],
+  [
+    'ProgramNotLoaded: the code throws while it loads (LoadError ScriptFailed)',
+    async (): Promise<CompileError> => errorOf(await startWorker('CrashesOnLoad', 'CrashesOnLoad')),
+  ],
+  [
+    'ProgramNotLoaded: no Elm object (LoadError NoElmObject, built by hand, because no call can cause it on purpose)',
+    (): CompileError => {
+      return { file: 'src/Main.elm', loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' }
+    },
+  ],
   [
     'EntryNotRead',
     async (): Promise<CompileError> => errorOf(await findAllDependencies(path.join(app, 'src', 'Missing.elm'))),
@@ -251,23 +265,19 @@ const logs: ReadonlyArray<[string, () => unknown]> = [
     (): unknown => findAllDependencies(projectWith('{ "type": "application" }')),
   ],
   [
-    'error: findAllDependencies of the deprecated API, for a file that does not exist',
-    (): unknown => legacy.findAllDependencies(path.join(app, 'src', 'Missing.elm')),
-  ],
-  [
     'the Elm runtime, when compileWorker starts a module built without --optimize',
     (): unknown => startWorker('Doubler', 'Doubler', { flags: 3 }),
   ],
 ]
 
 try {
-  console.log('#################### Errors, as CompileError.toCliError describes them')
+  console.log('#################### Errors, as CompileError.title and CompileError.toCliError describe them')
 
   for (const [name, make] of errors) {
     const error = await make()
 
     console.log(`\n========== ${name}`)
-    CliError.print('elm make', CompileError.toCliError(error))
+    CliError.print(CompileError.title(error), CompileError.toCliError(error))
   }
 
   console.log('\n#################### Everything else that reaches the console')

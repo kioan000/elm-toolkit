@@ -9,24 +9,26 @@
  *
  * Start with `compileToString`, which returns the generated JavaScript, and
  * `dryCompile`, which only checks that the program compiles. `compile` returns
- * the running process for a caller that wants its streams. `compileWorker`
- * starts a headless Elm program in this process, and `findAllDependencies`
- * lists the local files that a module imports.
+ * the running process for a caller that wants its streams. `compileRunnableProgram`
+ * compiles a program for this process: its `load` function runs the compiled
+ * code here and returns the modules, without starting any of them.
+ * `compileWorker` does the same and then starts one module as a headless
+ * worker. `findAllDependencies` lists the local files that a module imports.
  *
  * @packageDocumentation
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import * as path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
+import { runInThisContext } from 'node:vm'
 
 import { Result } from '@elm-toolkit/cli-lib'
 
 import type { CompileError } from './compile-error.ts'
+import type { LoadError } from './load-error.ts'
 import { findDependencies } from './find-elm-dependencies.ts'
 import {
   type CompilerOptions,
@@ -49,11 +51,8 @@ import {
 } from './process.ts'
 
 export { CompileError } from './compile-error.ts'
+export { LoadError } from './load-error.ts'
 export type { CompilerOptions, CompilerProcessOptions, Sources } from './process.ts'
-
-// The compiler writes a script that assigns to `this.Elm`, which only a CommonJS
-// loader runs correctly, so the worker is loaded with `require` and not `import`.
-const require = createRequire(import.meta.url)
 
 // Elm itself recognises this output on every system, Windows included, and then writes nothing.
 const noOutput = '/dev/null'
@@ -98,6 +97,55 @@ const knownModules = new Set([
  */
 export interface WorkerWithPorts {
   ports: Record<string, unknown>
+}
+
+/**
+ * A compiled module, with the `init` that starts it.
+ *
+ * @example
+ *
+ * Start a module with flags
+ * ```TypeScript
+ *   const main: ElmModule | undefined = elm.Main
+ *   main?.init({ flags: { name: 'Ada' } })
+ * ```
+ */
+export interface ElmModule {
+  init(args?: unknown): unknown
+}
+
+/**
+ * The `Elm` object of a compiled program: one entry for each module.
+ *
+ * A module with a dot in its name is nested: `Page.Home` is `elm.Page?.Home`.
+ * A missing module is `undefined`.
+ *
+ * @example
+ *
+ * See which modules a program has
+ * ```TypeScript
+ *   Object.keys(elm) // ['Main', 'Report']
+ * ```
+ */
+export type ElmNamespace = Readonly<Record<string, ElmModule | undefined>>
+
+/**
+ * A compiled program, not loaded yet. Each `load` gives a new instance, with
+ * its own state.
+ *
+ * @example
+ *
+ * Load a program twice, for two independent runs
+ * ```TypeScript
+ *   const first = program.load()
+ *   const second = program.load()
+ * ```
+ */
+export interface RunnableProgram {
+  /** The JavaScript that Elm wrote. */
+  readonly javascript: string
+  /** Runs the code in this process and returns its modules, without starting any. */
+  load(): Result<LoadError, ElmNamespace>
 }
 
 /**
@@ -299,7 +347,7 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  *     case 'Ok':
  *       return console.log('The program compiles.')
  *     case 'Err':
- *       return CliError.print('elm make', CompileError.toCliError(dryCompileResult.error))
+ *       return CliError.print(CompileError.title(dryCompileResult.error), CompileError.toCliError(dryCompileResult.error))
  *   }
  * ```
  *
@@ -313,29 +361,67 @@ export async function dryCompile(sources: Sources, options: CompilerOptions): Pr
 }
 
 /**
- * Compiles a headless Elm program and starts it inside the current process.
- * Use it for build steps and command line tools written in Elm, which exchange
- * data with Node through ports.
+ * Compiles a program to run in this process. Use it when you choose the module,
+ * the flags and the ports. `compileWorker` does the same for one worker.
  *
- * The compiler runs in `projectRootDir`, so `elm.json` is found there. The
- * working directory of the current process does not change, and the compiled
- * code is removed once the worker has started.
+ * The messages of Elm are in the error when the build fails, and on the
+ * console with `verbose`.
  *
  * @example
  *
- * Start a worker and listen to one of its ports
+ * Compile a program, load it, and start Main
  * ```TypeScript
- *   const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+ *   const compileRunnableProgramResult = await compileRunnableProgram(['src/Main.elm'], { optimize: true })
+ *
+ *   switch (compileRunnableProgramResult.type_) {
+ *     case 'Ok':
+ *       return compileRunnableProgramResult.value.load().map((elm) => elm.Main?.init())
+ *     case 'Err':
+ *       return CliError.print(
+ *         CompileError.title(compileRunnableProgramResult.error),
+ *         CompileError.toCliError(compileRunnableProgramResult.error)
+ *       )
+ *   }
  * ```
  *
- * @param projectRootDir - the directory that contains `elm.json`
+ * @param sources - one Elm file, or the Elm files of one program
+ * @param options - the compiler options; `output` is ignored
+ * @returns `Ok` the program, or `Err` when the build fails
+ */
+export async function compileRunnableProgram(
+  sources: Sources,
+  options: CompilerOptions
+): Promise<Result<CompileError, RunnableProgram>> {
+  const compiled = await compileToString(sources, { ...options, output: undefined })
+
+  return compiled.map((javascript) => {
+    return { javascript, load: () => loadJavaScript(javascript) }
+  })
+}
+
+/**
+ * Compiles a headless Elm program and starts it in this process. Use it for
+ * tools written in Elm, which talk to Node through ports.
+ *
+ * Elm runs in `projectRootDir`. The working directory of the process does not
+ * change. A module with a dot in its name cannot start: use
+ * `compileRunnableProgram` for it.
+ *
+ * @example
+ *
+ * Start a worker and see its ports
+ * ```TypeScript
+ *   const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+ *
+ *   compileWorkerResult.map((worker) => Object.keys(worker.ports)) // Ok ['input', 'output']
+ * ```
+ *
+ * @param projectRootDir - the directory with `elm.json`
  * @param modulePath - the Elm file to compile
- * @param moduleName - the module to start, as Elm names it, for example `Generator`
- * @param workerArgs - the argument of `init`, as Elm expects it: `{ flags: ... }`, or
- * `undefined` for a program without flags
- * @returns `Ok` the running worker, with its ports, or `Err` when the build
- * fails, when `moduleName` is not in the output, when its `init` throws, or
- * when the module has no ports
+ * @param moduleName - the module to start, such as `Generator`
+ * @param workerArgs - the argument of `init`, such as `{ flags: 42 }`, or `undefined`
+ * @returns `Ok` the worker, or `Err` when the build, the load or the start fails,
+ * or the module has no ports
  */
 export async function compileWorker(
   projectRootDir: string,
@@ -343,25 +429,15 @@ export async function compileWorker(
   moduleName: string,
   workerArgs: unknown
 ): Promise<Result<CompileError, WorkerWithPorts>> {
-  const temporary = (await Result.fromPromise(mkdtemp(path.join(tmpdir(), 'node-elm-compiler-')))).mapError(
-    (caught): CompileError => {
-      return { cause: messageOf(caught), folder: tmpdir(), original: caught, type_: 'TempFolderNotCreated' }
-    }
-  )
+  const compiled = await compileRunnableProgram(modulePath, { cwd: projectRootDir })
 
-  if (temporary.type_ === 'Err') {
-    return Result.Err(temporary.error)
-  }
-
-  const output = path.join(temporary.value, 'emitter.js')
-
-  try {
-    const built = await runToTheEnd(modulePath, { cwd: projectRootDir, output })
-
-    return built.andThen(() => startWorker(output, modulePath, moduleName, workerArgs))
-  } finally {
-    await rm(temporary.value, { force: true, recursive: true })
-  }
+  return compiled
+    .andThen((program) =>
+      program.load().mapError((loadError): CompileError => {
+        return { file: modulePath, loadError, type_: 'ProgramNotLoaded' }
+      })
+    )
+    .andThen((elm) => startWorker(elm, modulePath, moduleName, workerArgs))
 }
 
 /**
@@ -593,49 +669,85 @@ function messageOf(caught: unknown): string {
 }
 
 /**
- * Loads the compiled program and starts the module as a worker.
+ * Runs the compiled code in this process. The code assigns `this.Elm`, so it
+ * runs with a `this` of its own: nothing becomes global, and no module cache
+ * keeps it.
  *
- * @param file - the compiled JavaScript
- * @param modulePath - the Elm file that was compiled, for the error message
+ * @param javascript - the compiled code
+ * @returns `Ok` the `Elm` object, or `Err` when the code throws or does not define it
+ */
+function loadJavaScript(javascript: string): Result<LoadError, ElmNamespace> {
+  const scope: { Elm?: ElmNamespace } = {}
+
+  return Result.fromAttempt(() => {
+    // The wrapper adds one line before the code, so lineOffset keeps the line numbers of stack traces.
+    const run = runInThisContext(`(function () {\n${javascript}\n})`, {
+      filename: 'elm-program.js',
+      lineOffset: -1,
+    }) as (this: object) => void
+
+    run.call(scope)
+  })
+    .mapError((caught): LoadError => {
+      return { cause: messageOf(caught), original: caught, type_: 'ScriptFailed' }
+    })
+    .andThen((): Result<LoadError, ElmNamespace> =>
+      scope.Elm === undefined ? Result.Err({ type_: 'NoElmObject' }) : Result.Ok(scope.Elm)
+    )
+}
+
+/**
+ * Lists the modules that have `init`, with full names such as `Tools.Echo`.
+ *
+ * @param namespace - the `Elm` object, or a nested part of it
+ * @param prefix - the name of that part with a final dot, or `''`
+ * @returns the full names
+ */
+function moduleNames(namespace: object, prefix: string): ReadonlyArray<string> {
+  return Object.entries(namespace)
+    .filter(([name]) => prefix !== '' || !knownModules.has(name))
+    .flatMap(([name, entry]: [string, unknown]) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return []
+      }
+
+      const nested = moduleNames(entry, `${prefix}${name}.`)
+
+      return 'init' in entry && typeof entry.init === 'function' ? [`${prefix}${name}`, ...nested] : nested
+    })
+}
+
+/**
+ * Starts one module of a loaded program as a worker.
+ *
+ * @param elm - the `Elm` object
+ * @param modulePath - the compiled Elm file, for the messages
  * @param moduleName - the module to start
  * @param workerArgs - the argument of `init`
- * @returns `Ok` the worker, or `Err` when the file cannot be loaded, the module
- * is not in it, its `init` throws, for example for flags of the wrong type, or
- * it has no ports
+ * @returns `Ok` the worker, or `Err` when the module is missing, its `init`
+ * throws, or it has no ports
  */
 function startWorker(
-  file: string,
+  elm: ElmNamespace,
   modulePath: string,
   moduleName: string,
   workerArgs: unknown
 ): Result<CompileError, WorkerWithPorts> {
-  return Result.fromAttempt(
-    () => (require(file) as { Elm: Record<string, { init(args?: unknown): Partial<WorkerWithPorts> }> }).Elm
-  )
+  const module_ = elm[moduleName]
+
+  // A module whose name has a dot is nested, and the entry of its first part has no init.
+  if (typeof module_?.init !== 'function') {
+    return Result.Err({ file: modulePath, moduleName, suggestions: moduleNames(elm, ''), type_: 'ModuleNotFound' })
+  }
+
+  return Result.fromAttempt(() => module_.init(workerArgs) as Partial<WorkerWithPorts>)
     .mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file, original: caught, type_: 'OutputNotRead' }
+      return { cause: messageOf(caught), file: modulePath, moduleName, original: caught, type_: 'WorkerNotStarted' }
     })
-    .andThen((elm): Result<CompileError, WorkerWithPorts> => {
-      const module_ = elm[moduleName]
-
-      if (module_ === undefined) {
-        return Result.Err({
-          file: modulePath,
-          moduleName,
-          suggestions: Object.keys(elm).filter((name) => !knownModules.has(name)),
-          type_: 'ModuleNotFound',
-        })
-      }
-
-      return Result.fromAttempt(() => module_.init(workerArgs))
-        .mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: modulePath, moduleName, original: caught, type_: 'WorkerNotStarted' }
-        })
-        .andThen((worker): Result<CompileError, WorkerWithPorts> =>
-          // Elm leaves `ports` out entirely when a module declares none.
-          worker.ports && Object.keys(worker.ports).length > 0
-            ? Result.Ok({ ...worker, ports: worker.ports })
-            : Result.Err({ file: modulePath, moduleName, type_: 'NoPorts' })
-        )
-    })
+    .andThen((worker): Result<CompileError, WorkerWithPorts> =>
+      // Elm leaves `ports` out entirely when a module declares none.
+      worker.ports && Object.keys(worker.ports).length > 0
+        ? Result.Ok({ ...worker, ports: worker.ports })
+        : Result.Err({ file: modulePath, moduleName, type_: 'NoPorts' })
+    )
 }

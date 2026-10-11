@@ -10,6 +10,30 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ### Breaking changes
 
+- **The functions of `./runner` return a `Result`**
+
+  `@elm-toolkit/elm-node-runner`: `compileProgram`, `startMain` and `runElm` no
+  longer throw or reject. Each one returns a `Result` with a `RunnerError`.
+  `RunnerError.title` says in a few words what went wrong, and
+  `RunnerError.toCliError` describes the failure for a person. `startProgram`
+  starts a compiled program, with a launcher or with `Main`. In
+  `ElmNamespace`, a module that the build does not have is `undefined`.
+
+  **How to fix:** read the `Result` where the old code caught an exception.
+
+  ```diff
+  -try {
+  -  await runElm({ elmFiles: ['src/Main.elm'] })
+  -} catch (error) {
+  -  console.error(error)
+  -}
+  +const runElmResult = await runElm({ elmFiles: ['src/Main.elm'] })
+  +
+  +if (runElmResult.type_ === 'Err') {
+  +  CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
+  +}
+  ```
+
 - **The `./hot` subpath is removed**
 
   `@elm-toolkit/webpack-elm-loader`: the hot loader no longer exists. The Elm
@@ -143,6 +167,13 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   `print` functions show it the way every command of the toolkit does. A
   `CliError` can also carry the report of another program, such as a
   compiler, which is shown under "Details:" as that program wrote it.
+- `@elm-toolkit/cli-lib`: `continuingSentence`, which lowers the first letter
+  of a text that continues a sentence, such as a message of the system after a
+  colon, and keeps proper nouns and words in capitals. `CliError.print` and
+  `CliSuccess.print` use it for the summary, which continues the sentence of
+  the title. `CliError.toString` takes the title too, for a text that has to
+  start with it, and `splitFirstLine` splits a message into the line of a
+  summary and the lines below it.
 - `@elm-toolkit/cli-elm-kernel-patcher`: `patchKernel`, which patches the Elm
   home and prints the progress and the outcome, as the command does.
 - `@elm-toolkit/cli-elm-kernel-patcher` and the plugin: `patches` takes a
@@ -167,10 +198,15 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 - `@elm-toolkit/node-elm-compiler`: the `./result-api` subpath. It has the
   functions of the root, with the same names and options, but each one returns
   a `Result` with a `CompileError` instead of throwing.
-  `CompileError.toCliError` turns that error into a message for a person. An
-  error that comes from an exception keeps it in `original`.
+  `CompileError.title` says in a few words what went wrong, and
+  `CompileError.toCliError` adds the detail for a person. An error that comes
+  from an exception keeps it in `original`.
 - `@elm-toolkit/node-elm-compiler`: `dryCompile`, in `./result-api`. It checks
   that a program compiles, and writes no output.
+- `@elm-toolkit/node-elm-compiler`: `compileRunnableProgram`, in
+  `./result-api`. It compiles a program, and its `load` function runs the code
+  in the current process and returns the modules, without starting any of them.
+  A failure of `load` is a `LoadError`.
 
 ### Changed
 
@@ -202,8 +238,15 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
     reports, without the progress lines, also in the `verbose` log.
   - `compileWorker` names the compiler when it is not installed, instead of
     `Errored with exit code -2`.
-  - `findAllDependencies` logs a file that it cannot read with a message that
-    says what happened and how to fix it, instead of the raw error.
+  - `compileWorker` with a module whose name has a dot, such as `Tools.Echo`,
+    suggests its full name instead of `Tools`.
+- `@elm-toolkit/elm-node-runner`: the command no longer shows the messages of
+  Elm while it builds. A build that succeeds is reported before the program
+  starts. A failure prints one error in the layout of the toolkit, with a short
+  title that says what went wrong, such as `Elm code does not compile`, and the
+  problems of Elm under "Details:". It also reports a launcher that cannot be
+  imported or that throws, a program that fails while it loads, and a `Main`
+  whose `init` throws, where it used to print the bare exception.
 - `@elm-toolkit/webpack-elm-loader` and `@elm-toolkit/elm-node-runner` use the
   new API of `@elm-toolkit/node-elm-compiler`. When the loader cannot read the
   imports of a file, webpack shows a warning in the layout of the toolkit,
@@ -222,6 +265,21 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   -import { compileToString } from '@elm-toolkit/node-elm-compiler'
   +import { compileToString } from '@elm-toolkit/node-elm-compiler/result-api'
   ```
+
+- `@elm-toolkit/elm-node-runner`: the `--log-info` option. A failed build
+  already shows the messages of Elm in its error, so the option adds only the
+  compiler command. It still works, prints a warning, and a later release will
+  remove it.
+
+  **How to fix:** remove `--log-info` from the scripts that start the runner.
+
+### Fixed
+
+- `@elm-toolkit/node-elm-compiler`: the deprecated `findAllDependencies`
+  rejects again when the entry file cannot be read or does not start with a
+  valid module declaration, with the same value as the original package. Since
+  0.1.0-alpha.1 it logged the problem and returned the known dependencies, so a
+  caller could not tell a failed search from a module without imports.
 
 ## [0.1.0-alpha.2] - 2026-10-02
 

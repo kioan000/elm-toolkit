@@ -27,7 +27,7 @@ describe('CliSuccess', () => {
     )
   })
 
-  it('prints the highlighted summary, then what happened and the next step, after blank lines', () => {
+  it('prints the summary after the title in lower case, then what happened and the next step, after blank lines', () => {
     const printed = mock.method(console, 'info', () => undefined)
 
     CliSuccess.print(
@@ -47,7 +47,7 @@ describe('CliSuccess', () => {
 
     assert.deepEqual(lines, [
       '',
-      'DONE:archive build Built elm-kernel-patcher/patches.tar.gz from 1 commits.',
+      'DONE:archive build built elm-kernel-patcher/patches.tar.gz from 1 commits.',
       '',
       '    What happened:',
       '        elm/core 1.0.5 from https://github.com/lydell/core.git at 310bb9e',

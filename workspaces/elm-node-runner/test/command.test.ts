@@ -1,11 +1,12 @@
 /**
- * Checks the runner the way a user meets it: as a command, started in its own
- * process, on the Elm project in `fixtures/project`.
+ * Checks the command as a user runs it: in its own process, on
+ * `fixtures/project`, with the pinned Elm first on the `PATH`.
  *
- * Every run puts the directory of the real Elm 0.19.2 compiler, from the `elm`
- * dev dependency, first on the `PATH`, because the runner calls `elm` by name.
- * The compiler prints its progress to standard error, and the programs print to
- * standard output, so most checks read both together.
+ * A build that succeeds prints one report, before the program prints. A failure
+ * prints one error, with a short title that says what went wrong, and the problems of Elm
+ * under "Details". Both go to standard output. The checks read each stream
+ * on its own, so a change of stream fails a test. A long line of an error wraps,
+ * so the checks read errors with `flat`.
  *
  * @packageDocumentation
  */
@@ -33,14 +34,24 @@ const pathWithElm = `${path.dirname(findElmBinary())}${path.delimiter}${process.
 function run(
   args: string[],
   settings: { cwd?: string; path?: string } = {}
-): { output: string; status: number | null; stdout: string } {
+): { output: string; status: number | null; stderr: string; stdout: string } {
   const result = spawnSync(process.execPath, [command, ...args], {
     cwd: settings.cwd ?? project,
     encoding: 'utf8',
     env: { ...process.env, PATH: settings.path ?? pathWithElm },
   })
 
-  return { output: result.stdout + result.stderr, status: result.status, stdout: result.stdout }
+  return { output: result.stdout + result.stderr, status: result.status, stderr: result.stderr, stdout: result.stdout }
+}
+
+/**
+ * Removes the colour codes, and joins the lines that an error wraps.
+ *
+ * @param text - what the command printed
+ * @returns the text, with every run of spaces and line breaks as one space
+ */
+function flat(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*m/g, '').replace(/\s+/g, ' ')
 }
 
 describe('elm-node-runner', () => {
@@ -65,6 +76,22 @@ describe('elm-node-runner', () => {
     assert.match(result.stdout, /^eval can reach function$/m, 'the evaluated code should see the global app')
   })
 
+  it('reports the build that succeeds, before what the program prints', () => {
+    const lines = flat(run(['src/Main.elm']).stdout)
+
+    assert.match(
+      lines,
+      /^ DONE:compiled successfully\S* src\/Main\.elm What happened: Main starts now\. What the program prints follows\. eval can reach function Hello from Main $/
+    )
+  })
+
+  it('names the launcher in the report of the build', () => {
+    assert.match(
+      flat(run(['--ts', 'launcher.ts', 'src/Main.elm', 'src/Greeter.elm']).stdout),
+      /launcher\.ts starts the program now\./
+    )
+  })
+
   it('gives the launcher the Elm object, with every compiled module', () => {
     const result = run(['--ts', 'launcher.ts', 'src/Main.elm', 'src/Greeter.elm'])
 
@@ -78,13 +105,18 @@ describe('elm-node-runner', () => {
     assert.doesNotMatch(run(['--optimize', 'src/Main.elm']).output, /Compiled in DEV mode/)
   })
 
-  it('prints the compiler command with --log-info', () => {
-    assert.match(run(['--log-info', 'src/Main.elm']).stdout, /^Running \S*elm make src\/Main\.elm/m)
+  it('warns that --log-info is deprecated, and still prints the compiler command and the messages of Elm', () => {
+    const { status, stdout } = run(['--log-info', 'src/Main.elm'])
+
+    assert.equal(status, 0)
+    assert.match(stdout, /WARNING:deprecated option\S* --log-info will be removed in a later release\./)
+    assert.match(stdout, /^Running \S*elm make src\/Main\.elm/m)
+    assert.match(stdout, /^Success!/m)
   })
 
   it('removes the compiled code once the program has started', () => {
     const temporaryDirectories = (): string[] =>
-      readdirSync(tmpdir()).filter((name) => name.startsWith('elm-node-runner-'))
+      readdirSync(tmpdir()).filter((name) => name.startsWith('node-elm-compiler-'))
     const before = temporaryDirectories()
 
     run(['src/Main.elm'])
@@ -116,22 +148,53 @@ describe('elm-node-runner', () => {
       const result = run(['src/Broken.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.output, /TYPE MISMATCH/)
-      assert.match(result.output, /The Elm compiler reported an error/)
+      assert.match(result.stdout, /ERROR:Elm code does not compile\S* src\/Broken\.elm$/m)
+      assert.match(result.stdout, /Details:\S*\n\s+-- TYPE MISMATCH/, 'the problems of Elm are part of the error')
+      assert.doesNotMatch(result.stderr, /TYPE MISMATCH/, 'nothing of the build goes to standard error')
     })
 
     it('when there is no launcher and no module called Main', () => {
       const result = run(['src/Greeter.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.output, /No compiled module is called Main; the build exports Greeter/)
+      assert.match(result.stdout, /ERROR:no Main module to run\S* the build has only Greeter\.$/m)
     })
 
     it('when the launcher has no function as its default export', () => {
       const result = run(['--ts', 'not-a-function.ts', 'src/Main.elm'])
 
       assert.equal(result.status, 1)
-      assert.match(result.output, /not-a-function\.ts must export a function as its default export/)
+      assert.match(
+        result.stdout,
+        /ERROR:launcher exports no function\S* check the default export of not-a-function\.ts\.$/m
+      )
+    })
+
+    it('when the launcher cannot be imported', () => {
+      const result = run(['--ts', 'cannot-load.ts', 'src/Main.elm'])
+
+      assert.equal(result.status, 1)
+      assert.match(
+        result.stdout,
+        /ERROR:launcher cannot be loaded\S* cannot-load\.ts: TypeScript enum is not supported/m
+      )
+    })
+
+    it('when the launcher throws', () => {
+      const result = run(['--ts', 'throws.ts', 'src/Main.elm'])
+
+      assert.equal(result.status, 1)
+      assert.match(result.stdout, /ERROR:launcher threw an error\S* throws\.ts: the launcher broke$/m)
+    })
+
+    it('when the compiled program throws while it loads', () => {
+      const result = run(['src/CrashesOnLoad.elm'])
+
+      assert.equal(result.status, 1)
+      assert.match(
+        result.stdout,
+        /ERROR:Elm program crashed before it started\S* TODO in module `CrashesOnLoad` on line 11$/m
+      )
     })
 
     it('when the launcher does not exist', () => {
@@ -162,7 +225,9 @@ describe('elm-node-runner', () => {
         const result = run(['src/Main.elm'], { path: emptyDirectory })
 
         assert.equal(result.status, 1)
-        assert.match(result.output, /Could not find Elm compiler "elm"/)
+        assert.match(result.stdout, /ERROR:Elm compiler not found\S* "elm"$/m)
+        assert.match(flat(result.stdout), /start elm-node-runner from a script of package\.json/)
+        assert.doesNotMatch(result.stdout, /pathToElm/, 'the command has no option to choose the binary')
       } finally {
         rmSync(emptyDirectory, { force: true, recursive: true })
       }

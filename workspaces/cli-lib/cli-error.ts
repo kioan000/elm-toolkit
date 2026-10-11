@@ -18,7 +18,7 @@
  */
 
 import { prettyError } from './index.ts'
-import { type Section, printSections, sectionsToString } from './layout.ts'
+import { type Section, continuingSentence, printSections, sectionsToString } from './layout.ts'
 import { Maybe } from './maybe.ts'
 
 /**
@@ -170,26 +170,31 @@ function sections(error: CliError): ReadonlyArray<Section> {
  * Turns an error into text, in the same layout as `print` but without colors:
  * the summary, then each section that has content, with a blank line between
  * them. Use it where an error has to become a JavaScript `Error`, for example
- * to stop webpack.
+ * to stop webpack. With a title, the first line is the title and the summary,
+ * after a colon, as `print` shows them.
  *
  * @example
  *
- * Show an error as text
+ * Show an error as text, with its title
  * ```TypeScript
- *   CliError.toString(CliError.create({ solution: 'Check the path.', summary: 'No patches at nowhere.' }))
- *   // 'No patches at nowhere.\n\nHow to fix:\n    Check the path.'
+ *   CliError.toString(CliError.create({ solution: 'Check the path.', summary: 'Nowhere.' }), 'no patches found')
+ *   // 'no patches found: nowhere.\n\nHow to fix:\n    Check the path.'
  * ```
  *
  * @param error - the error to turn into text
+ * @param title - what went wrong, in a few words; without it, the text starts with the summary
  * @returns the summary and the sections, separated by blank lines
  */
-function toString(error: CliError): string {
-  return sectionsToString(error.summary, sections(error))
+function toString(error: CliError, title?: string): string {
+  const firstLine = title === undefined ? error.summary : `${title}: ${continuingSentence(error.summary)}`
+
+  return sectionsToString(firstLine, sections(error))
 }
 
 /**
  * Prints an error the way every command of the toolkit does. The first line
- * holds the title and the summary, highlighted in red. Below it come the
+ * holds the title, highlighted in red, and the summary, which continues its
+ * sentence and so starts in lower case, as `continuingSentence` makes it. Below it come the
  * sections that have content, each after a blank line: "What happened:",
  * "Details:" with the messages of another program, "How to fix:" with the
  * solution, its label in green, and "Stack trace:" with the stack in grey.
@@ -209,7 +214,7 @@ function toString(error: CliError): string {
  * @param error - the error to print
  */
 function print(title: string, error: CliError): void {
-  prettyError(title, error.summary)
+  prettyError(title, continuingSentence(error.summary))
   printSections(sections(error))
 }
 

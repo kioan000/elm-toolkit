@@ -155,6 +155,7 @@ export async function compileToString(sources: unknown, options: CompilerOptions
         case 'TempFolderNotCreated':
         case 'OutputNotRead':
         case 'ModuleNotFound':
+        case 'ProgramNotLoaded':
         case 'WorkerNotStarted':
         case 'NoPorts':
         case 'EntryNotRead':
@@ -203,6 +204,7 @@ export function compileToStringSync(sources: unknown, options: CompilerOptions):
         case 'TempFolderNotCreated':
         case 'OutputNotRead':
         case 'ModuleNotFound':
+        case 'ProgramNotLoaded':
         case 'WorkerNotStarted':
         case 'NoPorts':
         case 'EntryNotRead':
@@ -374,6 +376,7 @@ function legacyError(error: CompileError): unknown {
     case 'OutputNotRead':
       return error.original
     case 'ModuleNotFound':
+    case 'ProgramNotLoaded':
     case 'WorkerNotStarted':
     case 'NoPorts':
       return workerMessage(error)
@@ -444,6 +447,11 @@ function workerMessage(error: CompileError): unknown {
     case 'WorkerNotStarted':
       // The original wrapped the exception of init, whose text starts with its name.
       return `Error: ${error.cause}`
+    case 'ProgramNotLoaded':
+      // The original rejected with what the compiled code threw while it loaded.
+      return error.loadError.type_ === 'ScriptFailed'
+        ? error.loadError.original
+        : 'The compiled code did not produce the Elm object.'
     case 'UnknownOption':
     case 'CompilerNotStarted':
     case 'CompilerStopped':

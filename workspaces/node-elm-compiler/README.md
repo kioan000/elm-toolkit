@@ -39,12 +39,16 @@ switch (compileToStringResult.type_) {
     console.log(`${compileToStringResult.value.length} characters of JavaScript`)
     break
   case 'Err':
-    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
+    CliError.print(
+      CompileError.title(compileToStringResult.error),
+      CompileError.toCliError(compileToStringResult.error)
+    )
 }
 ```
 
-`CompileError.toCliError` turns an error into a message for a person, with the
-next step when there is one. A caller can also read `error.type_` and react to
+`CompileError.title` says in a few words what went wrong, and
+`CompileError.toCliError` adds the detail and the next step when there is one.
+`CliError.print` shows the title highlighted, followed by the rest. A caller can also read `error.type_` and react to
 one case, for example show the messages of a failed build in the browser. An
 error that comes from an exception keeps the exception in `original`, with its
 stack and its system code.
@@ -89,6 +93,26 @@ const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.e
 `compileWorker` compiles a headless Elm program and starts it in the current
 process. Tools written in Elm use it to exchange data with Node through ports.
 
+`compileRunnableProgram` does the first half of that work. It compiles a
+program and returns it with a `load` function, which runs the compiled code in
+the current process and returns its modules, without starting any of them. The
+caller then chooses the module, the flags and the ports. Each call of `load`
+gives a new instance of the program, and nothing becomes global.
+
+```ts
+import { compileRunnableProgram } from '@elm-toolkit/node-elm-compiler/result-api'
+
+const compileRunnableProgramResult = await compileRunnableProgram(['src/Main.elm'], { optimize: true })
+// Ok { javascript, load }, or Err with a CompileError
+
+if (compileRunnableProgramResult.type_ === 'Ok') {
+  const loadResult = compileRunnableProgramResult.value.load()
+  // Ok { Main: { init } }, or Err with a LoadError when the code throws while it loads
+
+  loadResult.map((elm) => elm.Main?.init({ flags: { name: 'Ada' } }))
+}
+```
+
 ## Moving to the new API
 
 Each function of the old API has a function with the same name in
@@ -112,7 +136,7 @@ where the old code caught an exception.
 +    await writeFile('public/main.js', compileToStringResult.value)
 +    break
 +  case 'Err':
-+    CliError.print('elm make', CompileError.toCliError(compileToStringResult.error))
++    CliError.print(CompileError.title(compileToStringResult.error), CompileError.toCliError(compileToStringResult.error))
 +}
 ```
 
@@ -137,6 +161,40 @@ application whose `elm.json` declares `"elm-version": "0.19.1"`, and the other
 way round. Each version also keeps its own package cache, in `ELM_HOME/0.19.1`
 and `ELM_HOME/0.19.2`, so the first build after a change of version downloads the
 packages again.
+
+### Differences from the original package
+
+The deprecated API keeps the behaviour of `node-elm-compiler` 5.0.6 and
+`find-elm-dependencies` 2.0.4, which are no longer maintained, with the
+differences below. Each one is on purpose, and `test/compatibility.test.ts`
+checks it, next to the behaviour that must stay as it was. When a change makes
+one of the other checks fail, it breaks code written for the original package.
+
+- An option that the package does not know, and an `Error` that a custom
+  `spawn` throws, are thrown as an `Error`. The original threw the message as a
+  JSON string, with quotes around it.
+- A compiler that is not installed is reported as an error. The original
+  crashed the whole Node process from `compile`, `compileToString` and
+  `compileWorker`.
+- Sources that are neither a string nor a list are reported with a message that
+  says so. The original blamed the compiler.
+- A failed build of `compileToString` holds only the problems that Elm reports,
+  without the progress lines.
+- A failed build of `compileWorker` holds the problems that Elm reports. The
+  original printed them and said only the exit code.
+- A module without ports in `compileWorker` gets the message about ports. The
+  original failed with a `TypeError` of its own code.
+- `compileWorker` still cannot start a module whose name has a dot, such as
+  `Tools.Echo`, because Elm nests it as `Elm.Tools.Echo`. The suggestions of the
+  error give the full name, `Tools.Echo`. The original suggested `Tools`, which
+  has no `init`.
+- `compileWorker` does not change the working directory of the process while
+  Elm runs, and removes its temporary folder at once. The original changed the
+  directory, and removed the folder when the process ended.
+- `compileToString` keeps the `processOpts` of the caller. The original replaced
+  them.
+- `findAllDependencies` returns a promise also for a file that is already
+  known. The original returned the array itself.
 
 ## Requirements
 

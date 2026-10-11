@@ -1,57 +1,133 @@
 # @elm-toolkit/elm-node-runner
 
-Compiles Elm modules and runs them in Node, in one command. Use it for scripts
-written in Elm: code generation, command line tools, steps of a build or of a
-CI pipeline.
+Runs an Elm program in Node with one command. You write a headless program, a
+`Platform.worker`, and the runner compiles it, starts it, and connects its
+ports. Use it for scripts written in Elm: code generation, command line tools,
+steps of a build or of a CI pipeline.
 
 The package is a fork of [`elm-node`](https://github.com/joakin/elm-node). It
-compiles through `@elm-toolkit/node-elm-compiler`, so it has no dependency
-outside this repository, and it runs a TypeScript launcher directly, because
-Node 24 can run TypeScript on its own.
+compiles through `@elm-toolkit/node-elm-compiler`, and it runs a TypeScript
+launcher directly, because Node 24 can run TypeScript on its own.
 
-## Running a program
+## Getting started
 
-Without a launcher, the runner starts the module called `Main`.
+Install the runner and Elm in an Elm project, the folder with `elm.json`:
 
 ```sh
-elm-node-runner --example-elm > src/Main.elm
-elm-node-runner src/Main.elm
+npm install --save-dev @elm-toolkit/elm-node-runner elm
 ```
 
-Two ports are connected. Whatever `Main` sends through a `log` port is printed.
-Whatever it sends through an `eval` port runs as JavaScript, and that code can
-reach the program as the global `app`, for example to send a value back to Elm.
-`eval` runs any code it receives, so use it only with code that your program
-writes itself.
+Write `src/Main.elm`, or let the runner write it with
+`npx elm-node-runner --example-elm > src/Main.elm`:
+
+```elm
+port module Main exposing (main)
+
+
+port log : String -> Cmd msg
+
+
+main : Program () () ()
+main =
+    Platform.worker
+        { init = \_ -> ( (), log "Hello from Elm" )
+        , update = \_ model -> ( model, Cmd.none )
+        , subscriptions = \_ -> Sub.none
+        }
+```
+
+Run it:
+
+```sh
+npx elm-node-runner src/Main.elm
+# Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize …
+# Hello from Elm
+```
+
+The first line comes from Elm itself. `--optimize` removes it.
+
+The runner calls `elm` by name, so run it through `npx` or from a script of
+`package.json`, which put the `elm` of the project on the `PATH`.
+
+## How the program talks to Node
+
+Without a launcher, the runner starts the module called `Main`, without flags,
+and connects two ports, when the program declares them:
+
+- `port log : String -> Cmd msg` prints each value on the console.
+- `port eval : String -> Cmd msg` runs each value as JavaScript. The code
+  reaches the program as the global `app`, for example to send a value back
+  through a port. It runs any code, so send it only code that the program
+  writes itself.
 
 ## Running a program through a launcher
 
-A launcher is a module whose default export is a function. The function receives
-the `Elm` object, with one entry for each compiled module, and starts whatever it
-needs with whatever flags and ports it needs.
+A launcher is a module whose default export receives the `Elm` object. Use one
+when the program needs flags, other ports, or a module that is not called
+`Main`. This launcher starts a code generator and writes what it sends:
 
-```sh
-elm-node-runner --example-elm > src/Main.elm
-elm-node-runner --example-ts > src/main.ts
-elm-node-runner --ts src/main.ts src/Main.elm
+```ts
+// generate.ts
+import { writeFileSync } from 'node:fs'
+
+type Elm = {
+  Generate: {
+    init(options: { flags: string }): {
+      ports: { output: { subscribe(listener: (text: string) => void): void } }
+    }
+  }
+}
+
+export default (Elm: Elm): void => {
+  const app = Elm.Generate.init({ flags: 'Colors' })
+
+  app.ports.output.subscribe((text) => writeFileSync('src/Colors.elm', text))
+}
 ```
 
-Node runs the launcher directly. A TypeScript launcher can therefore use only the
-syntax that Node can strip, which excludes for example `enum`, and it must live
-in your project, not in `node_modules`. A JavaScript launcher works as well.
+```sh
+npx elm-node-runner --ts generate.ts src/Generate.elm
+```
 
-## Options
+`Elm` has one entry for each compiled module. A module with a dot in its name
+is nested: `Tools.Echo` is `Elm.Tools.Echo`. `--example-ts` prints a launcher
+for the example `Main`.
 
-`--optimize` builds with `elm make --optimize`. `--log-info` prints the compiler
-command before it runs. `--help` lists every option.
+Node runs the launcher as it is. A TypeScript launcher uses only syntax that
+Node can strip, so no `enum`, and it lives in your project, not in
+`node_modules`. A JavaScript launcher works as well.
 
-The compiler runs in the current directory, so start the runner from your Elm
-project or from a folder below it. The compiled code goes to a temporary
-directory, which is removed once the program has started.
+## Options and errors
 
-The command exits with code one when the build fails, when the launcher is
-missing or has no function as its default export, and when there is no launcher
-and no module called `Main`.
+`--optimize` builds with `elm make --optimize`. `--help` lists every option.
+`--log-info` is deprecated: an error already shows the messages of Elm.
+
+Elm runs in the current directory, so start the runner from the Elm project or
+from a folder below it. The messages of Elm stay hidden while it builds. When
+the build succeeds, the command reports it before the program starts. When
+something fails, the command prints one error and exits with code one. The
+highlighted title of the error says in a few words what went wrong, such as
+`Elm code does not compile`. The rest says what happened and how to fix it, with
+the problems of Elm under "Details".
+
+## Using the runner from code
+
+`@elm-toolkit/elm-node-runner/runner` has the steps of the command as functions:
+`compileProgram` compiles and loads the program, `startProgram` starts it with
+a launcher or with `Main`, and `runElm` does both. Each one returns a `Result`,
+with a `RunnerError`. `RunnerError.title` says in a few words what went wrong,
+and `RunnerError.toCliError` describes the failure for a person.
+
+```ts
+import { CliError } from '@elm-toolkit/cli-lib'
+import { RunnerError, runElm } from '@elm-toolkit/elm-node-runner/runner'
+
+const runElmResult = await runElm({ elmFiles: ['src/Main.elm'], launcher: 'generate.ts' })
+
+if (runElmResult.type_ === 'Err') {
+  CliError.print(RunnerError.title(runElmResult.error), RunnerError.toCliError(runElmResult.error))
+}
+```
 
 ## Compatibility
 
@@ -61,8 +137,7 @@ as the README of `@elm-toolkit/node-elm-compiler` explains.
 
 ## Requirements
 
-Node 24, and an `elm` binary on the `PATH`. The package is compiled to `dist/`
-and published as JavaScript.
+Node 24, and an `elm` binary on the `PATH`.
 
 ## Thanks
 
