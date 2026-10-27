@@ -126,7 +126,9 @@ export async function main(args: string[]): Promise<number> {
 
   if (values['log-info']) {
     prettyWarn('deprecated option', '--log-info will be removed in a later release.')
-    console.info('    An error already shows the messages of Elm, so the option adds only the compiler command.')
+    console.info(
+      '    An error already shows the messages of Elm, so the option adds only the compiler command and its summary.'
+    )
   }
 
   const compileProgramResult = await compileProgram(elmFiles, {

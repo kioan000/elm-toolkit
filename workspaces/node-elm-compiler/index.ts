@@ -41,6 +41,7 @@ import {
   systemMessages,
 } from './process.ts'
 import * as resultApi from './result-api.ts'
+import { describeRun, printRun } from './run-details.ts'
 
 export type { CompilerOptions, CompilerProcessOptions } from './process.ts'
 
@@ -103,13 +104,15 @@ export function compileSync(sources: unknown, options: CompilerOptions): SyncCom
   const pathToElm = options.pathToElm || elmBinaryName
   const args = orThrow(processArgs(legacySources(sources), prepared))
 
+  const processOptions = prepareProcessOpts(prepared)
+
   if (prepared.verbose) {
-    console.log(['Running', pathToElm, ...args].join(' '))
+    printRun(pathToElm, args, describeRun(legacySources(sources), prepared, pathToElm, processOptions))
   }
 
   // The new compileSync returns only the messages, so this one runs the process itself to keep the exit status.
   try {
-    return (prepared.spawn as CompilerSpawnSync)(pathToElm, args, prepareProcessOpts(prepared))
+    return (prepared.spawn as CompilerSpawnSync)(pathToElm, args, processOptions)
   } catch (err: unknown) {
     throw err instanceof Error && !('code' in err) ? err : startErrorMessage(err, pathToElm)
   }

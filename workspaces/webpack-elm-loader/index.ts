@@ -67,7 +67,7 @@ export interface ElmLoaderOptions {
   report?: string
   /** Options for the runtime of the compiler, passed between `+RTS` and `-RTS`. */
   runtimeOptions?: ReadonlyArray<string>
-  /** Prints the compiler command before it runs. */
+  /** Prints the compiler command before it runs, with the binary that runs, the flags, the working directory and the `ELM_HOME`. */
   verbose?: boolean
 }
 
