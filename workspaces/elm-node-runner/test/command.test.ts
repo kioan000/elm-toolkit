@@ -110,7 +110,8 @@ describe('elm-node-runner', () => {
 
     assert.equal(status, 0, output)
     assert.match(stdout, /WARNING:deprecated option\S* --log-info will be removed in a later release\./)
-    assert.match(stdout, /^Running \S*elm make src\/Main\.elm/m)
+    assert.match(stdout, /> Running:\S* \S*elm make src\/Main\.elm/)
+    assert.match(stdout, /^ {8}Binary: +\S*elm$/m)
     assert.match(stdout, /^Success!/m)
   })
 

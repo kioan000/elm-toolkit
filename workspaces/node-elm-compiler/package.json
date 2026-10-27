@@ -24,6 +24,7 @@
     "compile-error.ts",
     "load-error.ts",
     "process.ts",
+    "run-details.ts",
     "find-elm-dependencies.ts",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
