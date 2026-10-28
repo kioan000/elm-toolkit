@@ -52,7 +52,7 @@ import {
 } from './process.ts'
 import { type BinaryLookup, describeRun, findBinary, printRun } from './run-details.ts'
 
-export { CompileError } from './compile-error.ts'
+export { CompileError, type CompilerStartError } from './compile-error.ts'
 export { LoadError } from './load-error.ts'
 export type { CompilerOptions, CompilerProcessOptions, Sources } from './process.ts'
 
@@ -177,10 +177,10 @@ export function prepareProcessArgs(sources: Sources, options: CompilerOptions): 
  * `dryCompile` when it only wants the outcome.
  *
  * A compiler that cannot start, for example because it is not installed, is
- * known only after this function returns. The process then emits `'error'`,
- * with a message that names the binary, and closes with a non-zero code. The
- * current process does not crash, even when the caller does not listen for
- * errors.
+ * known only after this function returns. The process then emits `'error'`
+ * with a `CompilerStartError`, whose `compileError` describes the failure,
+ * and closes with a non-zero code. The current process does not crash, even
+ * when the caller does not listen for errors.
  *
  * @example
  *
@@ -215,6 +215,7 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
         if (err instanceof Error) {
           systemMessages.set(err, err.message)
           err.message = startErrorMessage(err, pathToElm)
+          Object.assign(err, { compileError: startError(err, findBinary(pathToElm, processOptions)) })
         }
       }) as ChildProcess
     }).mapError((caught) => startError(caught, findBinary(pathToElm, processOptions)))

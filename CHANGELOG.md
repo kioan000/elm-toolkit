@@ -22,6 +22,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   that it found, or that it found none, the working directory, and the `PATH`.
   The `CompilerNotStarted` error has the new fields `binary`, `cwd` and
   `searchPath`.
+- The `'error'` event of a process from `compile` now carries the failure as a
+  `CompileError`, in `compileError`. The new type `CompilerStartError` describes
+  that event. Its message stays the same.
 
 #### webpack-elm-loader
 
