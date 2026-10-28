@@ -113,6 +113,23 @@ export type CompileError =
   | { readonly file: string; readonly type_: 'InvalidModule' }
 
 /**
+ * The error that a compiler process from `compile` emits when it cannot start,
+ * for example because the binary does not exist. Its message keeps the words
+ * of the original package; `compileError` holds the same failure as a
+ * `CompileError`, with the place where the system looked for the binary.
+ *
+ * @example
+ *
+ * Report a compiler that did not start
+ * ```TypeScript
+ *   compiler.on('error', (err: CompilerStartError) =>
+ *     CliError.print(CompileError.title(err.compileError), CompileError.toCliError(err.compileError))
+ *   )
+ * ```
+ */
+export type CompilerStartError = Error & { readonly compileError: CompileError }
+
+/**
  * Describes a compile error for a person. The summary adds only the detail to
  * the `title`: the file, the option or the compiler involved. "What happened"
  * explains what the call tried, and "How to fix" gives one concrete action.

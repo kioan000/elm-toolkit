@@ -19,6 +19,7 @@ import { CliError, Maybe, type Result, findElmBinary } from '@elm-toolkit/cli-li
 import {
   CompileError,
   type CompilerOptions,
+  type CompilerStartError,
   type ElmNamespace,
   LoadError,
   type RunnableProgram,
@@ -158,11 +159,17 @@ describe('prepareProcessArgs', () => {
 describe('compile', () => {
   it('names the binary in an error event, and keeps the message of the system for the compile error', async () => {
     const compiler = valueOf(compile(source('Main'), { ...inApp, pathToElm: missingElm }))
-    const error = await new Promise<Error>((resolve) => {
+    const error = await new Promise<CompilerStartError>((resolve) => {
       compiler.on('error', resolve)
     })
 
     assert.match(error.message, /Could not find Elm compiler/)
+    assert.deepEqual(
+      error.compileError.type_ === 'CompilerNotStarted'
+        ? [error.compileError.binary, error.compileError.code, error.compileError.cause]
+        : undefined,
+      [Maybe.Just(missingElm), Maybe.Just('ENOENT'), `spawn ${missingElm} ENOENT`]
+    )
 
     const reported = errorOf(await dryCompile(source('Main'), { ...inApp, pathToElm: missingElm }))
 
