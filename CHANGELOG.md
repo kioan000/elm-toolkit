@@ -31,6 +31,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 **Changed**
 
 - `verbose` shows the summary of each compiler run, with the binary that runs.
+- A compiler that cannot start gives the same error as node-elm-compiler, with
+  the folders that the system searched, and without a stack trace. Before, the
+  message was only "Could not find Elm compiler".
 
 #### elm-node-runner
 
