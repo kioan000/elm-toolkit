@@ -15,7 +15,7 @@
 import { existsSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 
-import { CliError, CliSuccess, isEntryPoint, prettyWarn, readPackageJson } from '@elm-toolkit/cli-lib'
+import { CliError, CliSuccess, isEntryPoint, readPackageJson } from '@elm-toolkit/cli-lib'
 
 import { exampleElm, exampleLauncher } from './lib/examples.ts'
 import { RunnerError, compileProgram, startProgram } from './lib/runner.ts'
@@ -40,7 +40,7 @@ object and starts the program itself.
 
   --ts <file>     a TypeScript or JavaScript launcher
   --optimize      build with elm make --optimize
-  --log-info      deprecated: an error already shows the messages of Elm
+  --verbose       print the binary, the flags and the folders of each build
   --example-elm   print a starter Main.elm
   --example-ts    print a starter launcher for it
   --version       print the version
@@ -74,9 +74,9 @@ export async function main(args: string[]): Promise<number> {
         'example-elm': { type: 'boolean' },
         'example-ts': { type: 'boolean' },
         help: { type: 'boolean' },
-        'log-info': { type: 'boolean' },
         optimize: { type: 'boolean' },
         ts: { type: 'string' },
+        verbose: { type: 'boolean' },
         version: { type: 'boolean' },
       },
     })
@@ -124,16 +124,9 @@ export async function main(args: string[]): Promise<number> {
     return 1
   }
 
-  if (values['log-info']) {
-    prettyWarn('deprecated option', '--log-info will be removed in a later release.')
-    console.info(
-      '    An error already shows the messages of Elm, so the option adds only the compiler command and its summary.'
-    )
-  }
-
   const compileProgramResult = await compileProgram(elmFiles, {
     optimize: values.optimize,
-    verbose: values['log-info'],
+    verbose: values.verbose,
   })
 
   if (compileProgramResult.type_ === 'Err') {
