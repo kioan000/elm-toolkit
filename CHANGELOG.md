@@ -37,9 +37,15 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 #### elm-node-runner
 
-**Changed**
+**Breaking changes**
 
-- `--log-info` shows the same summary under the compiler command.
+- `--log-info` is removed. To see how the build runs, use `--verbose`. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+
+**Added**
+
+- `--verbose`, which prints the binary that runs, the flags, the working
+  directory and the `ELM_HOME` of the build.
 
 ## [0.1.0-alpha.3] - 2026-10-11
 
