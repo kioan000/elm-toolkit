@@ -10,6 +10,25 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 #### node-elm-compiler
 
+**Breaking changes**
+
+- Every function of the Result API that starts the compiler returns an object,
+  with the details of the run in `details`. `compileToString` and
+  `compileToStringSync` return `{ details, javascript }`, `compileSync` returns
+  `{ details, messages }`, `dryCompile` returns `{ details }`, and `compile`
+  returns `{ compilerProcess, details }`. `compileRunnableProgram` and
+  `compileWorker` add `details` to the objects they returned. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+- `CompilerNotStarted`, `CompilerStopped` and `CompileFailed` carry the same
+  `details`.
+
+**Added**
+
+- `CompilerDetails`, the type of `details`: the binary that ran and where the
+  system looked for it, the sources, the flags, the working directory and the
+  `ELM_HOME`. `StartedCompiler`, `CompilerMessages`, `CompiledJavaScript` and
+  `CheckedProgram` are the types of the new values.
+
 **Changed**
 
 - With `verbose`, the `> Running:` line comes with a summary of the run: the
@@ -20,8 +39,7 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   Before, it printed nothing.
 - A compiler that cannot start now says where the system looked for it: the file
   that it found, or that it found none, the working directory, and the `PATH`.
-  The `CompilerNotStarted` error has the new fields `binary`, `cwd` and
-  `searchPath`.
+  The data is in `details.lookup` of the error.
 - The `'error'` event of a process from `compile` now carries the failure as a
   `CompileError`, in `compileError`. The new type `CompilerStartError` describes
   that event. Its message stays the same.
