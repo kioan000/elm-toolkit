@@ -105,13 +105,21 @@ describe('elm-node-runner', () => {
     assert.doesNotMatch(run(['--optimize', 'src/Main.elm']).output, /Compiled in DEV mode/)
   })
 
-  it('warns that --log-info is deprecated, and still prints the compiler command and the messages of Elm', () => {
-    const { output, status, stdout } = run(['--log-info', 'src/Main.elm'])
+  it('prints the compiler command, the details of the build and the messages of Elm with --verbose', () => {
+    const { output, status, stdout } = run(['--verbose', 'src/Main.elm'])
 
     assert.equal(status, 0, output)
-    assert.match(stdout, /WARNING:deprecated option\S* --log-info will be removed in a later release\./)
-    assert.match(stdout, /^Running \S*elm make src\/Main\.elm/m)
+    assert.match(stdout, /> Running:\S* elm make src\/Main\.elm/)
+    assert.match(stdout, /^ {8}Binary: +\S*elm$/m)
     assert.match(stdout, /^Success!/m)
+  })
+
+  it('refuses --log-info, which was removed, and shows the help', () => {
+    const { status, stderr } = run(['--log-info', 'src/Main.elm'])
+
+    assert.equal(status, 1)
+    assert.match(stderr, /Unknown option '--log-info'/)
+    assert.match(stderr, /--verbose/)
   })
 
   it('removes the compiled code once the program has started', () => {

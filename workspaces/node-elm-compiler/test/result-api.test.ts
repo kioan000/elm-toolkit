@@ -19,6 +19,7 @@ import { CliError, Maybe, type Result, findElmBinary } from '@elm-toolkit/cli-li
 import {
   CompileError,
   type CompilerOptions,
+  type CompilerStartError,
   type ElmNamespace,
   LoadError,
   type RunnableProgram,
@@ -41,6 +42,18 @@ const app = path.join(import.meta.dirname, 'fixtures', 'app')
 const imports = path.join(import.meta.dirname, 'fixtures', 'imports')
 const source = (name: string): string => path.join(app, 'src', `${name}.elm`)
 const inApp: CompilerOptions = { cwd: app, pathToElm: elm }
+
+// A compiler that the system did not find on the PATH.
+const notStarted: Extract<CompileError, { type_: 'CompilerNotStarted' }> = {
+  binary: Maybe.Nothing,
+  cause: '',
+  code: Maybe.Just('ENOENT'),
+  cwd: '/app',
+  original: undefined,
+  pathToElm: 'elm',
+  searchPath: ['/app/node_modules/.bin', '/usr/bin'],
+  type_: 'CompilerNotStarted',
+}
 
 /**
  * Takes the error out of a result that must have failed.
@@ -146,11 +159,17 @@ describe('prepareProcessArgs', () => {
 describe('compile', () => {
   it('names the binary in an error event, and keeps the message of the system for the compile error', async () => {
     const compiler = valueOf(compile(source('Main'), { ...inApp, pathToElm: missingElm }))
-    const error = await new Promise<Error>((resolve) => {
+    const error = await new Promise<CompilerStartError>((resolve) => {
       compiler.on('error', resolve)
     })
 
     assert.match(error.message, /Could not find Elm compiler/)
+    assert.deepEqual(
+      error.compileError.type_ === 'CompilerNotStarted'
+        ? [error.compileError.binary, error.compileError.code, error.compileError.cause]
+        : undefined,
+      [Maybe.Just(missingElm), Maybe.Just('ENOENT'), `spawn ${missingElm} ENOENT`]
+    )
 
     const reported = errorOf(await dryCompile(source('Main'), { ...inApp, pathToElm: missingElm }))
 
@@ -198,10 +217,13 @@ describe('compile', () => {
     })
 
     assert.deepEqual(errorOf(outcome), {
+      binary: Maybe.Just('/opt/elm'),
       cause: 'spawn EACCES',
       code: Maybe.Just('EACCES'),
+      cwd: process.cwd(),
       original: thrown,
       pathToElm: '/opt/elm',
+      searchPath: [],
       type_: 'CompilerNotStarted',
     })
   })
@@ -710,9 +732,9 @@ describe('CompileError.title', () => {
   it('says in a few words what went wrong, for each failure', () => {
     const errors: ReadonlyArray<CompileError> = [
       { hint: '', option: 'yes', type_: 'UnknownOption' },
-      { cause: '', code: Maybe.Just('ENOENT'), original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
-      { cause: '', code: Maybe.Just('EACCES'), original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
-      { cause: '', code: Maybe.Nothing, original: undefined, pathToElm: 'elm', type_: 'CompilerNotStarted' },
+      { ...notStarted, code: Maybe.Just('ENOENT') },
+      { ...notStarted, code: Maybe.Just('EACCES') },
+      { ...notStarted, code: Maybe.Nothing },
       { cause: '', original: undefined, pathToElm: 'elm', reason: 'timeout', type_: 'CompilerStopped' },
       { cause: '', original: undefined, pathToElm: 'elm', reason: 'maxBuffer', type_: 'CompilerStopped' },
       { cause: '', original: undefined, pathToElm: 'elm', reason: 'signal', type_: 'CompilerStopped' },
@@ -775,17 +797,32 @@ describe('CompileError.toCliError', () => {
     assert.match(error.solution.withDefault(''), /Check that \/tmp exists/)
   })
 
-  it('names a missing compiler and says how to install it', () => {
+  it('names a missing compiler, lists the folders of the PATH it searched, and says how to install it', () => {
     const error = CompileError.toCliError({
+      ...notStarted,
       cause: 'spawn elm ENOENT',
-      code: Maybe.Just('ENOENT'),
       original: Object.assign(new Error('spawn elm ENOENT'), { code: 'ENOENT' }),
-      pathToElm: 'elm',
-      type_: 'CompilerNotStarted',
     })
 
     assert.equal(error.summary, '"elm"')
+    assert.match(error.whatHappened.join(' '), /looked for "elm" in each folder of the PATH, in the order below/)
+    assert.deepEqual(error.details, ['Searched:  /app/node_modules/.bin', '           /usr/bin', 'CWD:       /app'])
     assert.match(error.solution.withDefault(''), /npm install --save-dev elm/)
+  })
+
+  it('names the file that a missing path points to, and asks to check pathToElm', () => {
+    const error = CompileError.toCliError({
+      ...notStarted,
+      binary: Maybe.Just('/app/node_modules/.bin/elm'),
+      pathToElm: 'node_modules/.bin/elm',
+      searchPath: [],
+    })
+
+    assert.deepEqual(error.whatHappened, [
+      'The build tried to run /app/node_modules/.bin/elm, and no file exists at that path.',
+    ])
+    assert.deepEqual(error.details, ['Binary:  /app/node_modules/.bin/elm', 'CWD:     /app'])
+    assert.equal(error.solution.withDefault(''), 'Check the path in pathToElm. A relative path starts from cwd.')
   })
 
   it('points to the timeout option when the system stopped the compiler', () => {

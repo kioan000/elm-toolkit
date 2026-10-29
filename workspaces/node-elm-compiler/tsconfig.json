@@ -20,6 +20,7 @@
     "compile-error.ts",
     "load-error.ts",
     "process.ts",
+    "run-details.ts",
     "find-elm-dependencies.ts"
   ],
   "references": [{ "path": "../cli-lib" }]

@@ -8,6 +8,45 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
+#### node-elm-compiler
+
+**Changed**
+
+- With `verbose`, the `> Running:` line comes with a summary of the run: the
+  file of the binary that runs, the sources, the flags, the working directory
+  and the `ELM_HOME`. When several Elm installations exist, it shows which one
+  the build uses. See [#20](https://github.com/kioan000/elm-toolkit/issues/20).
+- `compileSync` of the Result API now prints this summary with `verbose` too.
+  Before, it printed nothing.
+- A compiler that cannot start now says where the system looked for it: the file
+  that it found, or that it found none, the working directory, and the `PATH`.
+  The `CompilerNotStarted` error has the new fields `binary`, `cwd` and
+  `searchPath`.
+- The `'error'` event of a process from `compile` now carries the failure as a
+  `CompileError`, in `compileError`. The new type `CompilerStartError` describes
+  that event. Its message stays the same.
+
+#### webpack-elm-loader
+
+**Changed**
+
+- `verbose` shows the summary of each compiler run, with the binary that runs.
+- A compiler that cannot start gives the same error as node-elm-compiler, with
+  the folders that the system searched, and without a stack trace. Before, the
+  message was only "Could not find Elm compiler".
+
+#### elm-node-runner
+
+**Breaking changes**
+
+- `--log-info` is removed. To see how the build runs, use `--verbose`. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+
+**Added**
+
+- `--verbose`, which prints the binary that runs, the flags, the working
+  directory and the `ELM_HOME` of the build.
+
 ## [0.1.0-alpha.3] - 2026-10-11
 
 ### What's new

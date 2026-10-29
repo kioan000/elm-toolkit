@@ -7,6 +7,17 @@ versions, follow every section in between, from the oldest.
 The [changelog](CHANGELOG.md) lists everything that changed. This guide covers
 only what needs an edit on your side.
 
+## From 0.1.0-alpha.3 to 0.1.0-alpha.4
+
+**If you run `elm-node-runner` with `--log-info`**, remove the option. It was
+deprecated in 0.1.0-alpha.3, and the runner now refuses it. To see which Elm
+binary the build runs, with its flags and folders, use `--verbose`:
+
+```diff
+-elm-node-runner --log-info src/Main.elm
++elm-node-runner --verbose src/Main.elm
+```
+
 ## From 0.1.0-alpha.2 to 0.1.0-alpha.3
 
 Most of this release adds things. A few changes need a small edit on your side:

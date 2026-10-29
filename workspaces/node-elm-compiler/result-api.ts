@@ -50,8 +50,9 @@ import {
   startErrorMessage,
   systemMessages,
 } from './process.ts'
+import { type BinaryLookup, describeRun, findBinary, printRun } from './run-details.ts'
 
-export { CompileError } from './compile-error.ts'
+export { CompileError, type CompilerStartError } from './compile-error.ts'
 export { LoadError } from './load-error.ts'
 export type { CompilerOptions, CompilerProcessOptions, Sources } from './process.ts'
 
@@ -176,10 +177,10 @@ export function prepareProcessArgs(sources: Sources, options: CompilerOptions): 
  * `dryCompile` when it only wants the outcome.
  *
  * A compiler that cannot start, for example because it is not installed, is
- * known only after this function returns. The process then emits `'error'`,
- * with a message that names the binary, and closes with a non-zero code. The
- * current process does not crash, even when the caller does not listen for
- * errors.
+ * known only after this function returns. The process then emits `'error'`
+ * with a `CompilerStartError`, whose `compileError` describes the failure,
+ * and closes with a non-zero code. The current process does not crash, even
+ * when the caller does not listen for errors.
  *
  * @example
  *
@@ -199,22 +200,25 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
   const prepared = prepareOptions(options, options.spawn ?? spawn)
   const pathToElm = options.pathToElm || elmBinaryName
 
+  const processOptions = prepareProcessOpts(prepared)
+
   return processArgs(toList(sources), prepared).andThen((args) =>
     Result.fromAttempt(() => {
       if (prepared.verbose) {
-        console.log(['Running', pathToElm, ...args].join(' '))
+        printRun(pathToElm, args, describeRun(toList(sources), prepared, pathToElm, processOptions))
       }
 
-      const compiler = (prepared.spawn as CompilerSpawn)(pathToElm, args, prepareProcessOpts(prepared))
+      const compiler = (prepared.spawn as CompilerSpawn)(pathToElm, args, processOptions)
 
       // A listener stops an error event from crashing the process; the message names the binary.
       return compiler.on('error', (err: unknown) => {
         if (err instanceof Error) {
           systemMessages.set(err, err.message)
           err.message = startErrorMessage(err, pathToElm)
+          Object.assign(err, { compileError: startError(err, findBinary(pathToElm, processOptions)) })
         }
       }) as ChildProcess
-    }).mapError((caught) => startError(caught, pathToElm))
+    }).mapError((caught) => startError(caught, findBinary(pathToElm, processOptions)))
   )
 }
 
@@ -239,15 +243,20 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
 export function compileSync(sources: Sources, options: CompilerOptions): Result<CompileError, string> {
   const prepared = prepareOptions(options, options.spawn ?? spawnSyncAsCompilerSpawn)
   const pathToElm = options.pathToElm || elmBinaryName
+  const processOptions = prepareProcessOpts(prepared)
 
   return processArgs(toList(sources), prepared).andThen((args) =>
-    Result.fromAttempt(() =>
-      (prepared.spawn as CompilerSpawnSync)(pathToElm, args, { ...prepareProcessOpts(prepared), encoding: 'utf8' })
-    )
-      .mapError((caught) => startError(caught, pathToElm))
+    Result.fromAttempt(() => {
+      if (prepared.verbose) {
+        printRun(pathToElm, args, describeRun(toList(sources), prepared, pathToElm, processOptions))
+      }
+
+      return (prepared.spawn as CompilerSpawnSync)(pathToElm, args, { ...processOptions, encoding: 'utf8' })
+    })
+      .mapError((caught) => startError(caught, findBinary(pathToElm, processOptions)))
       .andThen((ran: SyncCompilerResult): Result<CompileError, string> => {
         if (ran.error) {
-          return Result.Err(syncRunError(ran.error, pathToElm))
+          return Result.Err(syncRunError(ran.error, findBinary(pathToElm, processOptions)))
         }
 
         return outcome(ran.status, String(ran.stdout ?? ''), String(ran.stderr ?? ''), sources)
@@ -528,7 +537,7 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
   }
 
   if (finished.startFailure !== undefined) {
-    return Result.Err(startError(finished.startFailure, pathToElm))
+    return Result.Err(startError(finished.startFailure, findBinary(pathToElm, prepareProcessOpts(options))))
   }
 
   if (finished.exitCode === null && finished.signal !== null) {
@@ -561,12 +570,13 @@ function collectText(stream: NodeJS.ReadableStream | null | undefined): () => st
  * the compiler started, when the system stopped it at a limit of the options.
  *
  * @param err - the error of the run
- * @param pathToElm - the binary that was started
+ * @param lookup - the binary that was started, and where the system looked for it
  * @returns a stopped compiler for a timeout or a full buffer, and a compiler
  * that did not start for anything else
  */
-function syncRunError(err: Error, pathToElm: string): CompileError {
+function syncRunError(err: Error, lookup: BinaryLookup): CompileError {
   const code = 'code' in err ? err.code : undefined
+  const { pathToElm } = lookup
 
   switch (code) {
     case 'ETIMEDOUT':
@@ -575,7 +585,7 @@ function syncRunError(err: Error, pathToElm: string): CompileError {
       return { cause: err.message, original: err, pathToElm, reason: 'maxBuffer', type_: 'CompilerStopped' }
 
     default:
-      return startError(err, pathToElm)
+      return startError(err, lookup)
   }
 }
 

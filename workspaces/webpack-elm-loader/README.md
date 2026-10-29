@@ -38,7 +38,7 @@ Every option is optional.
 | `pathToElm`            | `elm` on the `PATH`           | The Elm binary to run, for example `node_modules/.bin/elm`.                                                                                                                                                                      |
 | `report`               | none                          | Passed to `--report`, for example `json`.                                                                                                                                                                                        |
 | `runtimeOptions`       | none                          | Options for the runtime of the compiler, passed between `+RTS` and `-RTS`.                                                                                                                                                       |
-| `verbose`              | `false`                       | Prints the command before it runs.                                                                                                                                                                                               |
+| `verbose`              | `false`                       | Prints the command before it runs, with the binary that runs, the flags, the working directory and the `ELM_HOME`.                                                                                                               |
 
 The options can also come from a query string, for example
 `@elm-toolkit/webpack-elm-loader?debug=false`.
