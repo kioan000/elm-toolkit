@@ -116,11 +116,18 @@ const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.e
 
 `compileWorker` compiles a headless Elm program and starts it in the current
 process. Tools written in Elm use it to exchange data with Node through ports.
+It takes one record, so each input has a name. `compilerOptions` holds the same
+options as the other functions, such as `cwd`, `verbose` or `pathToElm`.
 
 ```ts
 import { compileWorker } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+const compileWorkerResult = await compileWorker({
+  compilerOptions: { cwd: 'tools', verbose: true },
+  moduleName: 'Generator',
+  sources: 'src/Generator.elm',
+  workerArgs: { flags: { seed: 42 } },
+})
 // Ok { details, ports: { input, output } }, or Err with a CompileError
 ```
 
@@ -176,6 +183,9 @@ Some results changed shape:
 - Every function that starts the compiler returns an object with the details of
   the run, as [The details of a run](#the-details-of-a-run) describes:
   `compileToString` gives `{ details, javascript }` instead of the text alone.
+- `compileWorker` takes one record, `{ compilerOptions, moduleName, sources,
+workerArgs }`, instead of four arguments. The project folder is
+  `compilerOptions.cwd`.
 - `compile` returns the process in `compilerProcess`. A compiler that cannot
   start is still an `'error'` event of the process, because it is known only
   after the call returns.

@@ -19,15 +19,24 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
   returns `{ compilerProcess, details }`. `compileRunnableProgram` and
   `compileWorker` add `details` to the objects they returned. See
   [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
-- `CompilerNotStarted`, `CompilerStopped` and `CompileFailed` carry the same
-  `details`.
+- Every error that comes from a run of the compiler carries the same `details`:
+  `CompilerNotStarted`, `CompilerStopped`, `CompileFailed`, `OutputNotRead`,
+  `ProgramNotLoaded`, `ModuleNotFound`, `WorkerNotStarted` and `NoPorts`. The
+  errors of `compileWorker` name the compiled files in `sources`, instead of
+  `file`.
+- `compileWorker` of the Result API takes one record:
+  `{ compilerOptions, moduleName, sources, workerArgs }`. It now accepts the
+  options of the other functions, such as `verbose` and `pathToElm`. The
+  project folder moves to `compilerOptions.cwd`. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
 
 **Added**
 
 - `CompilerDetails`, the type of `details`: the binary that ran and where the
   system looked for it, the sources, the flags, the working directory and the
   `ELM_HOME`. `StartedCompiler`, `CompilerMessages`, `CompiledJavaScript` and
-  `CheckedProgram` are the types of the new values.
+  `CheckedProgram` are the types of the new values, and `WorkerSpec` is the
+  record of `compileWorker`.
 
 **Changed**
 
