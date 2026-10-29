@@ -318,7 +318,7 @@ async function compileElm(sources: string[], options: ReceivedOptions): Promise<
 
         return
       case 'Ok': {
-        const compiler = started.value
+        const compiler = started.value.compilerProcess
 
         compiler.on('close', (exitCode: unknown) => {
           if (exitCode !== 0) {

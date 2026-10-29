@@ -2,11 +2,11 @@
  * What a compiler run receives, described for a person who debugs a build: the
  * binary that runs, the flags, the working directory and the `ELM_HOME`.
  *
- * The module is internal; the package does not export it. Node does not report
- * which file `spawn` runs, so `findBinary` repeats the lookup of the system.
- * `describeRun` collects the facts of one run, `printRun` shows them when
- * `verbose` is set, and `lookupLines` gives the part that explains a compiler
- * that did not start.
+ * The Result API exports the types `CompilerDetails` and `BinaryLookup`; the
+ * functions stay internal. Node does not report which file `spawn` runs, so
+ * `findBinary` repeats the lookup of the system. `describeRun` collects the
+ * details of one run, `printRun` shows them when `verbose` is set, and
+ * `lookupLines` gives the part that explains a compiler that did not start.
  *
  * @packageDocumentation
  */
@@ -47,13 +47,22 @@ export type BinaryLookup = {
 }
 
 /**
- * The facts of one compiler run, as `printRun` shows them.
+ * The details of one run of the compiler: the binary, the files and flags it
+ * receives, and its `ELM_HOME`. Every function of the Result API that starts
+ * the compiler returns them in `details`, in its value and in the errors of
+ * the run. `verbose` prints the same details, under "Details:".
  *
  * @example
  *
+ * Read which binary a build ran
+ * ```TypeScript
+ *   const dryCompileResult = await dryCompile('src/Main.elm', { cwd: '/app', optimize: true })
+ *   dryCompileResult.map(({ details }) => details.lookup.binary) // Ok (Just '/app/node_modules/.bin/elm')
+ * ```
+ *
  * An optimized build with the default Elm home
  * ```TypeScript
- *   const details: RunDetails = {
+ *   const details: CompilerDetails = {
  *     customElmHome: false,
  *     debug: false,
  *     elmHome: '/Users/ada/.elm',
@@ -66,17 +75,22 @@ export type BinaryLookup = {
  *   }
  * ```
  */
-export type RunDetails = {
+export type CompilerDetails = {
   /** True when `ELM_HOME` is set, in the environment or in `processOpts.env`. */
   readonly customElmHome: boolean
+  /** True when the build adds the debugger, with `--debug`. */
   readonly debug: boolean
   /** The `ELM_HOME` that the compiler uses, the default of Elm when none is set. */
   readonly elmHome: string
+  /** Where the system looked for the binary, and the file it found. */
   readonly lookup: BinaryLookup
+  /** True when the build uses `--optimize`. */
   readonly optimize: boolean
   /** The absolute path of the output. */
   readonly output: Maybe<string>
+  /** The format of the report of Elm, passed to `--report`. */
   readonly report: Maybe<string>
+  /** The options for the runtime of the compiler, passed between `+RTS` and `-RTS`. */
   readonly runtimeOptions: Maybe<ReadonlyArray<string>>
   /** The absolute paths of the Elm files. */
   readonly sources: ReadonlyArray<string>
@@ -126,7 +140,7 @@ export function findBinary(pathToElm: string, processOptions: CompilerProcessOpt
 }
 
 /**
- * Collects the facts of one run, from the options and the settings that the
+ * Collects the details of one run, from the options and the settings that the
  * child process receives.
  *
  * @example
@@ -141,14 +155,14 @@ export function findBinary(pathToElm: string, processOptions: CompilerProcessOpt
  * @param options - the compiler options
  * @param pathToElm - the command that `spawn` receives
  * @param processOptions - the options of the child process
- * @returns the facts that `printRun` shows
+ * @returns the details that `printRun` shows
  */
 export function describeRun(
   sources: ReadonlyArray<string>,
   options: CompilerOptions,
   pathToElm: string,
   processOptions: CompilerProcessOptions
-): RunDetails {
+): CompilerDetails {
   const lookup = findBinary(pathToElm, processOptions)
   const elmHome = processOptions.env?.ELM_HOME ?? ''
 
@@ -166,7 +180,7 @@ export function describeRun(
 }
 
 /**
- * Prints the command that runs, then the facts of the run under "Details:",
+ * Prints the command that runs, then the details of the run under "Details:",
  * one label for each line, and a blank line that separates them from the
  * messages of Elm. A run
  * with `verbose` calls it before the compiler starts.
@@ -188,9 +202,9 @@ export function describeRun(
  *
  * @param pathToElm - the command that `spawn` receives
  * @param args - its arguments
- * @param details - the facts of the run
+ * @param details - the details of the run
  */
-export function printRun(pathToElm: string, args: ReadonlyArray<string>, details: RunDetails): void {
+export function printRun(pathToElm: string, args: ReadonlyArray<string>, details: CompilerDetails): void {
   const notSet = 'not set'
 
   // The command names only the file, because Binary below gives its full path.

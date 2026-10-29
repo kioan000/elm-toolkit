@@ -1,6 +1,6 @@
 /**
  * Checks how a run is described for a person: the lookup of the binary on
- * fake folders of executables, the facts of a run, and the lines that
+ * fake folders of executables, the details of a run, and the lines that
  * `verbose` prints, with the pinned compiler on the fixture project.
  *
  * @packageDocumentation
@@ -120,7 +120,7 @@ describe('describeRun', () => {
 })
 
 describe('printRun', () => {
-  it('prints the command, then one aligned label for each fact', (t) => {
+  it('prints the command, then one aligned label for each detail', (t) => {
     const printed = t.mock.method(console, 'info', () => undefined)
     const details = describeRun(['src/Main.elm', 'src/Admin.elm'], { debug: true }, 'elm', {
       cwd: project,
@@ -178,7 +178,11 @@ describe('a compiler that does not start', () => {
     assert.equal(outcome.type_, 'Err')
     assert.deepEqual(
       outcome.type_ === 'Err' && outcome.error.type_ === 'CompilerNotStarted'
-        ? [outcome.error.binary, outcome.error.cwd, outcome.error.searchPath]
+        ? [
+            outcome.error.details.lookup.binary,
+            outcome.error.details.lookup.cwd,
+            outcome.error.details.lookup.searchPath,
+          ]
         : undefined,
       [Maybe.Nothing, app, [path.join(root, 'plain')]]
     )

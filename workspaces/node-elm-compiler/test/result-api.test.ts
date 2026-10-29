@@ -18,6 +18,7 @@ import { CliError, Maybe, type Result, findElmBinary } from '@elm-toolkit/cli-li
 
 import {
   CompileError,
+  type CompilerDetails,
   type CompilerOptions,
   type CompilerStartError,
   type ElmNamespace,
@@ -43,15 +44,25 @@ const imports = path.join(import.meta.dirname, 'fixtures', 'imports')
 const source = (name: string): string => path.join(app, 'src', `${name}.elm`)
 const inApp: CompilerOptions = { cwd: app, pathToElm: elm }
 
-// A compiler that the system did not find on the PATH.
+// A run whose compiler the system did not find on the PATH, for the errors built by hand.
+const details: CompilerDetails = {
+  customElmHome: false,
+  debug: false,
+  elmHome: '/home/ada/.elm',
+  lookup: { binary: Maybe.Nothing, cwd: '/app', pathToElm: 'elm', searchPath: ['/app/node_modules/.bin', '/usr/bin'] },
+  optimize: false,
+  output: Maybe.Nothing,
+  report: Maybe.Nothing,
+  runtimeOptions: Maybe.Nothing,
+  sources: ['/app/src/Main.elm'],
+}
+
 const notStarted: Extract<CompileError, { type_: 'CompilerNotStarted' }> = {
-  binary: Maybe.Nothing,
   cause: '',
   code: Maybe.Just('ENOENT'),
-  cwd: '/app',
+  details,
   original: undefined,
   pathToElm: 'elm',
-  searchPath: ['/app/node_modules/.bin', '/usr/bin'],
   type_: 'CompilerNotStarted',
 }
 
@@ -158,15 +169,15 @@ describe('prepareProcessArgs', () => {
 
 describe('compile', () => {
   it('names the binary in an error event, and keeps the message of the system for the compile error', async () => {
-    const compiler = valueOf(compile(source('Main'), { ...inApp, pathToElm: missingElm }))
+    const { compilerProcess } = valueOf(compile(source('Main'), { ...inApp, pathToElm: missingElm }))
     const error = await new Promise<CompilerStartError>((resolve) => {
-      compiler.on('error', resolve)
+      compilerProcess.on('error', resolve)
     })
 
     assert.match(error.message, /Could not find Elm compiler/)
     assert.deepEqual(
       error.compileError.type_ === 'CompilerNotStarted'
-        ? [error.compileError.binary, error.compileError.code, error.compileError.cause]
+        ? [error.compileError.details.lookup.binary, error.compileError.code, error.compileError.cause]
         : undefined,
       [Maybe.Just(missingElm), Maybe.Just('ENOENT'), `spawn ${missingElm} ENOENT`]
     )
@@ -176,16 +187,18 @@ describe('compile', () => {
     assert.match(reported.type_ === 'CompilerNotStarted' ? reported.cause : '', /^spawn .* ENOENT$/)
   })
 
-  it('returns the running process, which closes with code zero', async () => {
+  it('returns the running process, which closes with code zero, and the details of the run', async () => {
     const output = path.join(mkdtempSync(path.join(tmpdir(), 'result-api-')), 'main.js')
 
     try {
-      const compiler = valueOf(compile(source('Main'), { ...inApp, output, processOpts: { stdio: 'ignore' } }))
+      const started = valueOf(compile(source('Main'), { ...inApp, output, processOpts: { stdio: 'ignore' } }))
       const exitCode = await new Promise((resolve) => {
-        compiler.on('close', resolve)
+        started.compilerProcess.on('close', resolve)
       })
 
       assert.equal(exitCode, 0)
+      assert.deepEqual(started.details.lookup.binary, Maybe.Just(elm))
+      assert.deepEqual(started.details.output, Maybe.Just(output))
       assert.ok(existsSync(output))
     } finally {
       rmSync(path.dirname(output), { force: true, recursive: true })
@@ -216,15 +229,24 @@ describe('compile', () => {
       },
     })
 
-    assert.deepEqual(errorOf(outcome), {
+    const error = errorOf(outcome)
+
+    assert.deepEqual(
+      { ...error, details: undefined },
+      {
+        cause: 'spawn EACCES',
+        code: Maybe.Just('EACCES'),
+        details: undefined,
+        original: thrown,
+        pathToElm: '/opt/elm',
+        type_: 'CompilerNotStarted',
+      }
+    )
+    assert.deepEqual(error.type_ === 'CompilerNotStarted' ? error.details.lookup : undefined, {
       binary: Maybe.Just('/opt/elm'),
-      cause: 'spawn EACCES',
-      code: Maybe.Just('EACCES'),
       cwd: process.cwd(),
-      original: thrown,
       pathToElm: '/opt/elm',
       searchPath: [],
-      type_: 'CompilerNotStarted',
     })
   })
 })
@@ -233,7 +255,10 @@ describe('compileToString', () => {
   it('returns the generated JavaScript, and removes its temporary directory', async () => {
     const before = temporaryDirectories()
 
-    assert.match(valueOf(await compileToString(source('Main'), inApp)), /Hello from Elm/)
+    const { details: compiled, javascript } = valueOf(await compileToString(source('Main'), inApp))
+
+    assert.match(javascript, /Hello from Elm/)
+    assert.deepEqual(compiled.sources, [source('Main')])
     assert.deepEqual(temporaryDirectories(), before)
   })
 
@@ -290,7 +315,7 @@ describe('dryCompile', () => {
     const before = temporaryDirectories()
     const filesBefore = readdirSync(app)
 
-    assert.equal(valueOf(await dryCompile(source('Main'), inApp)), undefined)
+    assert.deepEqual(valueOf(await dryCompile(source('Main'), inApp)).details.output, Maybe.Just('/dev/null'))
     assert.deepEqual(temporaryDirectories(), before)
     assert.deepEqual(readdirSync(app), filesBefore, 'no output should appear next to the project')
   })
@@ -351,13 +376,17 @@ describe('dryCompile', () => {
       return compiler as never
     }
 
-    assert.deepEqual(errorOf(await dryCompile(source('Main'), { spawn })), {
-      cause: 'SIGKILL',
-      original: 'SIGKILL',
-      pathToElm: 'elm',
-      reason: 'signal',
-      type_: 'CompilerStopped',
-    })
+    assert.deepEqual(
+      { ...errorOf(await dryCompile(source('Main'), { spawn })), details: undefined },
+      {
+        cause: 'SIGKILL',
+        details: undefined,
+        original: 'SIGKILL',
+        pathToElm: 'elm',
+        reason: 'signal',
+        type_: 'CompilerStopped',
+      }
+    )
   })
 })
 
@@ -366,7 +395,7 @@ describe('compileSync and compileToStringSync', () => {
 
   it('returns the messages of the compiler when the build succeeds, without the progress line', () => {
     // Elm prints Success! only when it compiled something; with a warm cache it prints nothing.
-    assert.doesNotMatch(valueOf(compileSync(source('Main'), { ...quiet, output: '/dev/null' })), /Compiling/)
+    assert.doesNotMatch(valueOf(compileSync(source('Main'), { ...quiet, output: '/dev/null' })).messages, /Compiling/)
   })
 
   it('returns a type error as a failed build, with its exit code', () => {
@@ -400,17 +429,21 @@ describe('compileSync and compileToStringSync', () => {
       })
     )
 
-    assert.deepEqual(error, {
-      cause: 'spawnSync elm ETIMEDOUT',
-      original: timedOut,
-      pathToElm: elm,
-      reason: 'timeout',
-      type_: 'CompilerStopped',
-    })
+    assert.deepEqual(
+      { ...error, details: undefined },
+      {
+        cause: 'spawnSync elm ETIMEDOUT',
+        details: undefined,
+        original: timedOut,
+        pathToElm: elm,
+        reason: 'timeout',
+        type_: 'CompilerStopped',
+      }
+    )
   })
 
   it('returns the generated JavaScript as text', () => {
-    assert.match(valueOf(compileToStringSync(source('Main'), quiet)), /Hello from Elm/)
+    assert.match(valueOf(compileToStringSync(source('Main'), quiet)).javascript, /Hello from Elm/)
   })
 
   it('returns a type error as a failed build', () => {
@@ -500,8 +533,7 @@ describe('compileRunnableProgram', () => {
 
 describe('compileWorker', () => {
   /**
-   * Starts a worker from the fixture project, with the pinned compiler first on
-   * the `PATH`, because `compileWorker` has no option to choose the binary.
+   * Starts a worker from the fixture project, with the pinned compiler.
    *
    * @param file - the name of the Elm file in `src`, without the extension
    * @param moduleName - the module to start
@@ -509,13 +541,17 @@ describe('compileWorker', () => {
    * @returns whatever `compileWorker` returns
    */
   function startWorker(file: string, moduleName: string, workerArgs?: unknown): ReturnType<typeof compileWorker> {
-    const originalPath = process.env.PATH
+    return compileWorker({ compilerOptions: inApp, moduleName, sources: `src/${file}.elm`, workerArgs })
+  }
 
-    process.env.PATH = `${path.dirname(elm)}${path.delimiter}${originalPath}`
-
-    return compileWorker(app, `src/${file}.elm`, moduleName, workerArgs).finally(() => {
-      process.env.PATH = originalPath
-    })
+  /**
+   * Leaves out the details of an error, which hold paths of this machine.
+   *
+   * @param error - the error of a worker
+   * @returns the error without `details`
+   */
+  function withoutDetails(error: CompileError): object {
+    return Object.fromEntries(Object.entries(error).filter(([key]) => key !== 'details'))
   }
 
   it('starts the module, which answers through its ports', async () => {
@@ -533,27 +569,27 @@ describe('compileWorker', () => {
   })
 
   it('returns a wrong module name with the modules that exist', async () => {
-    assert.deepEqual(errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 })), {
-      file: 'src/Doubler.elm',
+    assert.deepEqual(withoutDetails(errorOf(await startWorker('Doubler', 'Dubler', { flags: 3 }))), {
       moduleName: 'Dubler',
+      sources: ['src/Doubler.elm'],
       suggestions: ['Doubler'],
       type_: 'ModuleNotFound',
     })
   })
 
   it('returns a module whose name has a dot as not found, with its full name as the suggestion', async () => {
-    assert.deepEqual(errorOf(await startWorker('Tools/Echo', 'Tools.Echo')), {
-      file: 'src/Tools/Echo.elm',
+    assert.deepEqual(withoutDetails(errorOf(await startWorker('Tools/Echo', 'Tools.Echo'))), {
       moduleName: 'Tools.Echo',
+      sources: ['src/Tools/Echo.elm'],
       suggestions: ['Tools.Echo'],
       type_: 'ModuleNotFound',
     })
   })
 
   it('returns the first part of a nested name as not found, because it has no init', async () => {
-    assert.deepEqual(errorOf(await startWorker('Tools/Echo', 'Tools')), {
-      file: 'src/Tools/Echo.elm',
+    assert.deepEqual(withoutDetails(errorOf(await startWorker('Tools/Echo', 'Tools'))), {
       moduleName: 'Tools',
+      sources: ['src/Tools/Echo.elm'],
       suggestions: ['Tools.Echo'],
       type_: 'ModuleNotFound',
     })
@@ -566,12 +602,11 @@ describe('compileWorker', () => {
     assert.match(error.type_ === 'WorkerNotStarted' ? error.cause : '', /Problem with the flags/)
   })
 
-  it('returns a module without ports as an error', async () => {
-    assert.deepEqual(errorOf(await startWorker('NoPorts', 'NoPorts')), {
-      file: 'src/NoPorts.elm',
-      moduleName: 'NoPorts',
-      type_: 'NoPorts',
-    })
+  it('returns a module without ports as an error, with the details of the run that built it', async () => {
+    const error = errorOf(await startWorker('NoPorts', 'NoPorts'))
+
+    assert.deepEqual(withoutDetails(error), { moduleName: 'NoPorts', sources: ['src/NoPorts.elm'], type_: 'NoPorts' })
+    assert.deepEqual(error.type_ === 'NoPorts' ? error.details.lookup.binary : undefined, Maybe.Just(elm))
   })
 
   it('returns a type error as a failed build, with the messages of Elm', async () => {
@@ -640,10 +675,10 @@ describe('compileWorker', () => {
     assert.deepEqual(await Promise.all([answer(triple, 2), answer(quintuple, 2)]), [6, 10])
   })
 
-  it('returns only the ports of the program, and adds nothing to the globals', async () => {
+  it('returns the ports of the program and the details of the run, and adds nothing to the globals', async () => {
     const worker = valueOf(await startWorker('Doubler', 'Doubler', { flags: 3 }))
 
-    assert.deepEqual(Object.keys(worker), ['ports'])
+    assert.deepEqual(Object.keys(worker).sort(), ['details', 'ports'])
     assert.equal('Elm' in globalThis, false)
   })
 
@@ -651,7 +686,12 @@ describe('compileWorker', () => {
     const pathWithElm = `${path.dirname(elm)}${path.delimiter}${process.env.PATH ?? ''}`
     const worker = valueOf(
       await withPath(pathWithElm, () =>
-        compileWorker(path.relative(process.cwd(), app), 'src/Doubler.elm', 'Doubler', { flags: 3 })
+        compileWorker({
+          compilerOptions: { cwd: path.relative(process.cwd(), app) },
+          moduleName: 'Doubler',
+          sources: 'src/Doubler.elm',
+          workerArgs: { flags: 3 },
+        })
       )
     )
 
@@ -670,7 +710,16 @@ describe('compileWorker', () => {
     const empty = mkdtempSync(path.join(tmpdir(), 'result-api-'))
 
     try {
-      const error = errorOf(await withPath(empty, () => compileWorker(app, 'src/Doubler.elm', 'Doubler', { flags: 3 })))
+      const error = errorOf(
+        await withPath(empty, () =>
+          compileWorker({
+            compilerOptions: { cwd: app },
+            moduleName: 'Doubler',
+            sources: 'src/Doubler.elm',
+            workerArgs: { flags: 3 },
+          })
+        )
+      )
 
       assert.equal(error.type_, 'CompilerNotStarted')
       assert.deepEqual(error.type_ === 'CompilerNotStarted' ? error.code : undefined, Maybe.Just('ENOENT'))
@@ -735,17 +784,30 @@ describe('CompileError.title', () => {
       { ...notStarted, code: Maybe.Just('ENOENT') },
       { ...notStarted, code: Maybe.Just('EACCES') },
       { ...notStarted, code: Maybe.Nothing },
-      { cause: '', original: undefined, pathToElm: 'elm', reason: 'timeout', type_: 'CompilerStopped' },
-      { cause: '', original: undefined, pathToElm: 'elm', reason: 'maxBuffer', type_: 'CompilerStopped' },
-      { cause: '', original: undefined, pathToElm: 'elm', reason: 'signal', type_: 'CompilerStopped' },
-      { exitCode: 1, output: '', sources: ['src/Main.elm'], type_: 'CompileFailed' },
+      { cause: '', details, original: undefined, pathToElm: 'elm', reason: 'timeout', type_: 'CompilerStopped' },
+      { cause: '', details, original: undefined, pathToElm: 'elm', reason: 'maxBuffer', type_: 'CompilerStopped' },
+      { cause: '', details, original: undefined, pathToElm: 'elm', reason: 'signal', type_: 'CompilerStopped' },
+      { details, exitCode: 1, output: '', sources: ['src/Main.elm'], type_: 'CompileFailed' },
       { cause: '', folder: '/tmp', original: undefined, type_: 'TempFolderNotCreated' },
-      { cause: '', file: '/tmp/elm.js', original: undefined, type_: 'OutputNotRead' },
-      { file: 'src/Main.elm', loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' },
-      { file: 'src/Main.elm', moduleName: 'Mian', suggestions: ['Main'], type_: 'ModuleNotFound' },
-      { file: 'src/Tools/Echo.elm', moduleName: 'Tools.Echo', suggestions: ['Tools.Echo'], type_: 'ModuleNotFound' },
-      { cause: '', file: 'src/Main.elm', moduleName: 'Main', original: undefined, type_: 'WorkerNotStarted' },
-      { file: 'src/Main.elm', moduleName: 'Main', type_: 'NoPorts' },
+      { cause: '', details, file: '/tmp/elm.js', original: undefined, type_: 'OutputNotRead' },
+      { details, loadError: { type_: 'NoElmObject' }, sources: ['src/Main.elm'], type_: 'ProgramNotLoaded' },
+      { details, moduleName: 'Mian', sources: ['src/Main.elm'], suggestions: ['Main'], type_: 'ModuleNotFound' },
+      {
+        details,
+        moduleName: 'Tools.Echo',
+        sources: ['src/Tools/Echo.elm'],
+        suggestions: ['Tools.Echo'],
+        type_: 'ModuleNotFound',
+      },
+      {
+        cause: '',
+        details,
+        moduleName: 'Main',
+        original: undefined,
+        sources: ['src/Main.elm'],
+        type_: 'WorkerNotStarted',
+      },
+      { details, moduleName: 'Main', sources: ['src/Main.elm'], type_: 'NoPorts' },
       { cause: '', file: 'src/Main.elm', original: undefined, type_: 'EntryNotRead' },
       { file: 'src/Main.elm', type_: 'InvalidModule' },
     ]
@@ -776,9 +838,10 @@ describe('CompileError.toCliError', () => {
   it('points to the flags when a worker did not start', () => {
     const error = CompileError.toCliError({
       cause: 'Problem with the flags given to your Elm program on initialization.',
-      file: 'src/Doubler.elm',
+      details,
       moduleName: 'Doubler',
       original: new Error('Problem with the flags given to your Elm program on initialization.'),
+      sources: ['src/Doubler.elm'],
       type_: 'WorkerNotStarted',
     })
 
@@ -813,9 +876,16 @@ describe('CompileError.toCliError', () => {
   it('names the file that a missing path points to, and asks to check pathToElm', () => {
     const error = CompileError.toCliError({
       ...notStarted,
-      binary: Maybe.Just('/app/node_modules/.bin/elm'),
+      details: {
+        ...details,
+        lookup: {
+          binary: Maybe.Just('/app/node_modules/.bin/elm'),
+          cwd: '/app',
+          pathToElm: 'node_modules/.bin/elm',
+          searchPath: [],
+        },
+      },
       pathToElm: 'node_modules/.bin/elm',
-      searchPath: [],
     })
 
     assert.deepEqual(error.whatHappened, [
@@ -828,6 +898,7 @@ describe('CompileError.toCliError', () => {
   it('points to the timeout option when the system stopped the compiler', () => {
     const error = CompileError.toCliError({
       cause: 'spawnSync elm ETIMEDOUT',
+      details,
       original: Object.assign(new Error('spawnSync elm ETIMEDOUT'), { code: 'ETIMEDOUT' }),
       pathToElm: 'elm',
       reason: 'timeout',
@@ -841,6 +912,7 @@ describe('CompileError.toCliError', () => {
   it('points to the buffer option when the messages were too long', () => {
     const error = CompileError.toCliError({
       cause: 'spawnSync elm ENOBUFS',
+      details,
       original: Object.assign(new Error('spawnSync elm ENOBUFS'), { code: 'ENOBUFS' }),
       pathToElm: 'elm',
       reason: 'maxBuffer',
@@ -853,6 +925,7 @@ describe('CompileError.toCliError', () => {
   it('says that a build stopped by a signal says nothing about the Elm code', () => {
     const error = CompileError.toCliError({
       cause: 'SIGKILL',
+      details,
       original: 'SIGKILL',
       pathToElm: 'elm',
       reason: 'signal',
@@ -865,6 +938,7 @@ describe('CompileError.toCliError', () => {
 
   it('keeps the messages of Elm as the details of a failed build, and points to them', () => {
     const error = CompileError.toCliError({
+      details,
       exitCode: 1,
       output: '-- TYPE MISMATCH --\n\nline\n',
       sources: ['src/Broken.elm'],
@@ -889,8 +963,9 @@ describe('CompileError.toCliError', () => {
 
   it('suggests the modules that exist for a wrong module name', () => {
     const error = CompileError.toCliError({
-      file: 'src/Doubler.elm',
+      details,
       moduleName: 'Dubler',
+      sources: ['src/Doubler.elm'],
       suggestions: ['Doubler'],
       type_: 'ModuleNotFound',
     })
@@ -901,8 +976,9 @@ describe('CompileError.toCliError', () => {
 
   it('explains that compileWorker does not start a module whose name has a dot, and what to do instead', () => {
     const error = CompileError.toCliError({
-      file: 'src/Tools/Echo.elm',
+      details,
       moduleName: 'Tools.Echo',
+      sources: ['src/Tools/Echo.elm'],
       suggestions: ['Tools.Echo'],
       type_: 'ModuleNotFound',
     })
@@ -920,8 +996,9 @@ describe('CompileError.toCliError', () => {
 
   it('gives the same explanation for a name without a dot when every module of the file has one', () => {
     const error = CompileError.toCliError({
-      file: 'src/Tools/Echo.elm',
+      details,
       moduleName: 'Echo',
+      sources: ['src/Tools/Echo.elm'],
       suggestions: ['Tools.Echo'],
       type_: 'ModuleNotFound',
     })
@@ -934,7 +1011,12 @@ describe('CompileError.toCliError', () => {
   })
 
   it('explains why a worker without ports is an error, and where to learn about ports', () => {
-    const error = CompileError.toCliError({ file: 'src/NoPorts.elm', moduleName: 'NoPorts', type_: 'NoPorts' })
+    const error = CompileError.toCliError({
+      details,
+      moduleName: 'NoPorts',
+      sources: ['src/NoPorts.elm'],
+      type_: 'NoPorts',
+    })
 
     assert.equal(error.summary, '"NoPorts" declares no port.')
     assert.match(error.whatHappened.join('\n'), /only through ports/)
@@ -944,6 +1026,7 @@ describe('CompileError.toCliError', () => {
   it('asks for a bug report when the output cannot be read', () => {
     const error = CompileError.toCliError({
       cause: 'ENOENT',
+      details,
       file: '/tmp/elm-output.js',
       original: Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
       type_: 'OutputNotRead',

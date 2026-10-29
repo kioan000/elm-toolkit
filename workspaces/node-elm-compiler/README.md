@@ -40,7 +40,7 @@ const compileToStringResult = await compileToString('src/Main.elm', { debug: tru
 
 switch (compileToStringResult.type_) {
   case 'Ok':
-    console.log(`${compileToStringResult.value.length} characters of JavaScript`)
+    console.log(`${compileToStringResult.value.javascript.length} characters of JavaScript`)
     break
   case 'Err':
     CliError.print(
@@ -57,12 +57,32 @@ also read `error.type_` and react to one case, for example show the messages of
 a failed build in the browser. An error that comes from an exception keeps the
 exception in `original`, with its stack and its system code.
 
-`compile` runs `elm make` as a child process and returns that process, for a
-caller that wants the exit code or the streams. Both functions have a `Sync`
-variant for scripts that can block.
+`compile` runs `elm make` as a child process and returns that process, in
+`compilerProcess`, for a caller that wants the exit code or the streams. Both
+functions have a `Sync` variant for scripts that can block.
 
 An option that the package does not know is an error. A misspelled flag
 therefore fails at once instead of being ignored.
+
+## The details of a run
+
+Every function that starts the compiler returns an object, with the details of
+the run in `details`: the file of the binary that ran, where the system looked
+for it, the sources, the flags, the working directory and the `ELM_HOME`. The
+errors of a run carry the same `details`. Use them when several Elm
+installations exist and you need to know which one a build used.
+
+```ts
+import { dryCompile } from '@elm-toolkit/node-elm-compiler/result-api'
+
+const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
+
+dryCompileResult.map(({ details }) => details.lookup.binary)
+// Ok (Just '/app/frontend/node_modules/.bin/elm')
+```
+
+With `verbose`, the package prints the same details under the command, in a
+section called "Details:".
 
 ## Checking without output
 
@@ -74,7 +94,7 @@ commit hook or a CI step.
 import { dryCompile } from '@elm-toolkit/node-elm-compiler/result-api'
 
 const dryCompileResult = await dryCompile('src/Main.elm', { cwd: 'frontend' })
-// Ok, or Err with type_ 'CompileFailed' and the messages of Elm
+// Ok { details }, or Err with type_ 'CompileFailed' and the messages of Elm
 ```
 
 ## Finding what a module imports
@@ -96,12 +116,19 @@ const dependenciesSearchResult = await findAllDependencies('/app/src/Page/Home.e
 
 `compileWorker` compiles a headless Elm program and starts it in the current
 process. Tools written in Elm use it to exchange data with Node through ports.
+It takes one record, so each input has a name. `compilerOptions` holds the same
+options as the other functions, such as `cwd`, `verbose` or `pathToElm`.
 
 ```ts
 import { compileWorker } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
-// Ok { ports: { input, output } }, or Err with a CompileError
+const compileWorkerResult = await compileWorker({
+  compilerOptions: { cwd: 'tools', verbose: true },
+  moduleName: 'Generator',
+  sources: 'src/Generator.elm',
+  workerArgs: { flags: { seed: 42 } },
+})
+// Ok { details, ports: { input, output } }, or Err with a CompileError
 ```
 
 `compileRunnableProgram` does the first half of that work. It compiles a
@@ -113,13 +140,12 @@ gives a new instance of the program, and nothing becomes global.
 ```ts
 import { compileRunnableProgram } from '@elm-toolkit/node-elm-compiler/result-api'
 
-const compileRunnableProgramResult = await
-compileRunnableProgram(['src/Main.elm'], { optimize: true }) // Ok { javascript,
-load }, or Err with a CompileError
+const compileRunnableProgramResult = await compileRunnableProgram(['src/Main.elm'], { optimize: true })
+// Ok { details, javascript, load }, or Err with a CompileError
 
-if (compileRunnableProgramResult.type_ === 'Ok') { const loadResult =
-compileRunnableProgramResult.value.load() // Ok { Main: { init } }, or Err with
-a LoadError when the code throws while it loads
+if (compileRunnableProgramResult.type_ === 'Ok') {
+  const loadResult = compileRunnableProgramResult.value.load()
+  // Ok { Main: { init } }, or Err with a LoadError when the code throws while it loads
 
   loadResult.map((elm) => elm.Main?.init({ flags: { name: 'Ada' } }))
 }
@@ -145,7 +171,7 @@ where the old code caught an exception.
 +
 +switch (compileToStringResult.type_) {
 +  case 'Ok':
-+    await writeFile('public/main.js', compileToStringResult.value)
++    await writeFile('public/main.js', compileToStringResult.value.javascript)
 +    break
 +  case 'Err':
 +    CliError.print(CompileError.title(compileToStringResult.error), CompileError.toCliError(compileToStringResult.error))
@@ -154,11 +180,17 @@ where the old code caught an exception.
 
 Some results changed shape:
 
-- `compile` returns `Result<CompileError, ChildProcess>`. A compiler that cannot
+- Every function that starts the compiler returns an object with the details of
+  the run, as [The details of a run](#the-details-of-a-run) describes:
+  `compileToString` gives `{ details, javascript }` instead of the text alone.
+- `compileWorker` takes one record, `{ compilerOptions, moduleName, sources,
+workerArgs }`, instead of four arguments. The project folder is
+  `compilerOptions.cwd`.
+- `compile` returns the process in `compilerProcess`. A compiler that cannot
   start is still an `'error'` event of the process, because it is known only
   after the call returns.
-- `compileSync` returns the messages of the compiler, and a failed build is an
-  `Err`. It no longer returns the object of `spawnSync`.
+- `compileSync` returns the messages of the compiler in `messages`, and a failed
+  build is an `Err`. It no longer returns the object of `spawnSync`.
 - `findAllDependencies` returns an `Err` for an entry file that cannot be read,
   instead of logging the problem and returning the dependencies it knew.
 - `_prepareProcessArgs` is `prepareProcessArgs`.
