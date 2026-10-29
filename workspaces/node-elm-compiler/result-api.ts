@@ -105,6 +105,34 @@ export interface WorkerWithPorts {
 }
 
 /**
+ * What `compileWorker` builds and starts: the Elm files, the module to start
+ * and its argument, and the options of the compiler. Each value has a name,
+ * because a worker needs more inputs than a plain build.
+ *
+ * @example
+ *
+ * A generator in the `tools` folder, built with the details printed
+ * ```TypeScript
+ *   const spec: WorkerSpec = {
+ *     compilerOptions: { cwd: 'tools', verbose: true },
+ *     moduleName: 'Generator',
+ *     sources: 'src/Generator.elm',
+ *     workerArgs: { flags: { seed: 42 } },
+ *   }
+ * ```
+ */
+export interface WorkerSpec {
+  /** The options of `elm make` and of its process, as for `compile`; `cwd` is the folder with `elm.json`. */
+  readonly compilerOptions?: CompilerOptions
+  /** The module to start, such as `Generator`. A name with a dot cannot start. */
+  readonly moduleName: string
+  /** One Elm file, or a list of Elm files that become one bundle. */
+  readonly sources: Sources
+  /** The argument of `init`, such as `{ flags: 42 }`; leave it out for a program without flags. */
+  readonly workerArgs?: unknown
+}
+
+/**
  * A compiler that `compile` started, with the details of its run.
  *
  * @example
@@ -388,7 +416,13 @@ export async function compileToString(
 
     return (await Result.fromPromise(readFile(output, { encoding: 'utf8' })))
       .mapError((caught): CompileError => {
-        return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
+        return {
+          cause: messageOf(caught),
+          details: built.value,
+          file: output,
+          original: caught,
+          type_: 'OutputNotRead',
+        }
       })
       .map((javascript) => {
         return { details: built.value, javascript }
@@ -424,7 +458,7 @@ export function compileToStringSync(
       return compileSync(sources, { ...options, output }).andThen(({ details }) =>
         Result.fromAttempt(() => readFileSync(output, { encoding: 'utf8' }))
           .mapError((caught): CompileError => {
-            return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
+            return { cause: messageOf(caught), details, file: output, original: caught, type_: 'OutputNotRead' }
           })
           .map((javascript) => {
             return { details, javascript }
@@ -513,41 +547,37 @@ export async function compileRunnableProgram(
  * Compiles a headless Elm program and starts it in this process. Use it for
  * tools written in Elm, which talk to Node through ports.
  *
- * Elm runs in `projectRootDir`. The working directory of the process does not
- * change. A module with a dot in its name cannot start: use
- * `compileRunnableProgram` for it.
+ * Elm runs in `compilerOptions.cwd`, as in the other functions. The working
+ * directory of the process does not change. A module with a dot in its name
+ * cannot start: use `compileRunnableProgram` for it.
  *
  * @example
  *
  * Start a worker and see its ports
  * ```TypeScript
- *   const compileWorkerResult = await compileWorker('.', 'src/Generator.elm', 'Generator', { flags: { seed: 42 } })
+ *   const compileWorkerResult = await compileWorker({
+ *     moduleName: 'Generator',
+ *     sources: 'src/Generator.elm',
+ *     workerArgs: { flags: { seed: 42 } },
+ *   })
  *
  *   compileWorkerResult.map((worker) => Object.keys(worker.ports)) // Ok ['input', 'output']
  * ```
  *
- * @param projectRootDir - the directory with `elm.json`
- * @param modulePath - the Elm file to compile
- * @param moduleName - the module to start, such as `Generator`
- * @param workerArgs - the argument of `init`, such as `{ flags: 42 }`, or `undefined`
- * @returns `Ok` the worker, or `Err` when the build, the load or the start fails,
- * or the module has no ports
+ * @param spec - the Elm files, the module to start, its argument and the options of the compiler
+ * @returns `Ok` the worker, with the details of the run, or `Err` when the
+ * build, the load or the start fails, or the module has no ports
  */
-export async function compileWorker(
-  projectRootDir: string,
-  modulePath: string,
-  moduleName: string,
-  workerArgs: unknown
-): Promise<Result<CompileError, WorkerWithPorts>> {
-  const compiled = await compileRunnableProgram(modulePath, { cwd: projectRootDir })
+export async function compileWorker(spec: WorkerSpec): Promise<Result<CompileError, WorkerWithPorts>> {
+  const sources = toList(spec.sources)
+  const compiled = await compileRunnableProgram(sources, spec.compilerOptions ?? {})
 
-  return compiled.andThen((program) =>
-    program
-      .load()
+  return compiled.andThen(({ details, load }) =>
+    load()
       .mapError((loadError): CompileError => {
-        return { file: modulePath, loadError, type_: 'ProgramNotLoaded' }
+        return { details, loadError, sources, type_: 'ProgramNotLoaded' }
       })
-      .andThen((elm) => startWorker(elm, modulePath, moduleName, workerArgs, program.details))
+      .andThen((elm) => startWorker(elm, { ...spec, sources }, details))
   )
 }
 
@@ -841,34 +871,31 @@ function moduleNames(namespace: object, prefix: string): ReadonlyArray<string> {
  * Starts one module of a loaded program as a worker.
  *
  * @param elm - the `Elm` object
- * @param modulePath - the compiled Elm file, for the messages
- * @param moduleName - the module to start
- * @param workerArgs - the argument of `init`
+ * @param spec - the module to start and the argument of its `init`, with the compiled files as a list, for the messages
+ * @param details - the details of the run that built the program
  * @returns `Ok` the worker, or `Err` when the module is missing, its `init`
  * throws, or it has no ports
  */
 function startWorker(
   elm: ElmNamespace,
-  modulePath: string,
-  moduleName: string,
-  workerArgs: unknown,
+  { moduleName, sources, workerArgs }: WorkerSpec & { readonly sources: ReadonlyArray<string> },
   details: CompilerDetails
 ): Result<CompileError, WorkerWithPorts> {
   const module_ = elm[moduleName]
 
   // A module whose name has a dot is nested, and the entry of its first part has no init.
   if (typeof module_?.init !== 'function') {
-    return Result.Err({ file: modulePath, moduleName, suggestions: moduleNames(elm, ''), type_: 'ModuleNotFound' })
+    return Result.Err({ details, moduleName, sources, suggestions: moduleNames(elm, ''), type_: 'ModuleNotFound' })
   }
 
   return Result.fromAttempt(() => module_.init(workerArgs) as Partial<WorkerWithPorts>)
     .mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file: modulePath, moduleName, original: caught, type_: 'WorkerNotStarted' }
+      return { cause: messageOf(caught), details, moduleName, original: caught, sources, type_: 'WorkerNotStarted' }
     })
     .andThen((worker): Result<CompileError, WorkerWithPorts> =>
       // Elm leaves `ports` out entirely when a module declares none.
       worker.ports && Object.keys(worker.ports).length > 0
         ? Result.Ok({ ...worker, details, ports: worker.ports })
-        : Result.Err({ file: modulePath, moduleName, type_: 'NoPorts' })
+        : Result.Err({ details, moduleName, sources, type_: 'NoPorts' })
     )
 }

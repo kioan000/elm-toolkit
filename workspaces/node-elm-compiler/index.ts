@@ -259,7 +259,12 @@ export async function compileWorker(
   moduleName: string,
   workerArgs: unknown
 ): Promise<Omit<resultApi.WorkerWithPorts, 'details'>> {
-  const started = await resultApi.compileWorker(projectRootDir, modulePath, moduleName, workerArgs)
+  const started = await resultApi.compileWorker({
+    compilerOptions: { cwd: projectRootDir },
+    moduleName,
+    sources: modulePath,
+    workerArgs,
+  })
 
   switch (started.type_) {
     case 'Ok':

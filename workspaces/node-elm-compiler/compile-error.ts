@@ -83,29 +83,47 @@ export type CompileError =
       readonly type_: 'TempFolderNotCreated'
     }
   /** The file that the compiler wrote could not be read. */
-  | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'OutputNotRead' }
+  | {
+      readonly cause: string
+      readonly details: CompilerDetails
+      readonly file: string
+      readonly original: unknown
+      readonly type_: 'OutputNotRead'
+    }
   /**
    * `compileWorker` found no module `moduleName` to start. `suggestions` has the
    * full names, such as `Tools.Echo`. A name with a dot always ends here.
    */
   | {
-      readonly file: string
+      readonly details: CompilerDetails
       readonly moduleName: string
+      readonly sources: ReadonlyArray<string>
       readonly suggestions: ReadonlyArray<string>
       readonly type_: 'ModuleNotFound'
     }
-  /** `compileWorker` compiled `file`, and its code failed while it loaded. */
-  | { readonly file: string; readonly loadError: LoadError; readonly type_: 'ProgramNotLoaded' }
+  /** `compileWorker` compiled `sources`, and their code failed while it loaded. */
+  | {
+      readonly details: CompilerDetails
+      readonly loadError: LoadError
+      readonly sources: ReadonlyArray<string>
+      readonly type_: 'ProgramNotLoaded'
+    }
   /** The `init` of the module threw, most often because of flags of the wrong type. */
   | {
       readonly cause: string
-      readonly file: string
+      readonly details: CompilerDetails
       readonly moduleName: string
       readonly original: unknown
+      readonly sources: ReadonlyArray<string>
       readonly type_: 'WorkerNotStarted'
     }
   /** The module has no ports, so Node cannot talk to it. */
-  | { readonly file: string; readonly moduleName: string; readonly type_: 'NoPorts' }
+  | {
+      readonly details: CompilerDetails
+      readonly moduleName: string
+      readonly sources: ReadonlyArray<string>
+      readonly type_: 'NoPorts'
+    }
   /** The Elm file to start from could not be read. */
   | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'EntryNotRead' }
   /** The first line of the Elm file is not a valid module declaration. */
@@ -199,6 +217,7 @@ function toCliError(error: CompileError): CliError {
     case 'ProgramNotLoaded':
       return LoadError.toCliError(error.loadError)
     case 'ModuleNotFound': {
+      const sources = error.sources.join(', ')
       const dotted = dottedModule(error.moduleName, error.suggestions)
       // The module exists, and only the dot in its name stops compileWorker.
       const exists = error.suggestions.includes(error.moduleName)
@@ -209,18 +228,18 @@ function toCliError(error: CompileError): CliError {
             (name) =>
               `compileWorker starts only a module whose name has no dot. Give the entry module a name without a dot, for example Main in a project of its own. Or load the program with compileRunnableProgram, and start Elm.${name} yourself.`
           )
-          .withDefault(moduleNameFix(error.moduleName, error.suggestions, error.file)),
+          .withDefault(moduleNameFix(error.moduleName, error.suggestions, sources)),
         summary: exists
           ? `"${error.moduleName}" has a dot in its name.`
-          : `"${error.moduleName}" is not in ${error.file}.`,
+          : `"${error.moduleName}" is not in ${sources}.`,
         whatHappened: [
-          `compileWorker compiled ${error.file}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
+          `compileWorker compiled ${sources}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
           ...(exists
             ? []
             : [
                 error.suggestions.length === 0
-                  ? `${error.file} has no module with that name.`
-                  : `${error.file} has only these modules: ${error.suggestions.join(', ')}.`,
+                  ? `${sources} has no module with that name.`
+                  : `${sources} has only these modules: ${error.suggestions.join(', ')}.`,
               ]),
           ...dotted
             .map((name) => [
@@ -235,16 +254,16 @@ function toCliError(error: CompileError): CliError {
         solution: `Check the flags passed to compileWorker: they must match the type that the init function of ${error.moduleName} expects.`,
         summary: splitFirstLine(error.cause)[0],
         whatHappened: [
-          `compileWorker compiled ${error.file} and called the init function of "${error.moduleName}", which threw an error.`,
+          `compileWorker compiled ${error.sources.join(', ')} and called the init function of "${error.moduleName}", which threw an error.`,
           ...splitFirstLine(error.cause)[1],
         ],
       })
     case 'NoPorts':
       return CliError.create({
-        solution: `Declare a port in ${error.file}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
+        solution: `Declare a port in ${error.sources.join(', ')}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
         summary: `"${error.moduleName}" declares no port.`,
         whatHappened: [
-          `compileWorker compiled ${error.file} and started the module "${error.moduleName}", which declares no ports.`,
+          `compileWorker compiled ${error.sources.join(', ')} and started the module "${error.moduleName}", which declares no ports.`,
           'Node exchanges data with a worker only through ports, so a worker without ports cannot receive input or return a result.',
         ],
       })
@@ -354,7 +373,7 @@ function dottedModule(moduleName: string, suggestions: ReadonlyArray<string>): M
  *
  * @param moduleName - the name that was given
  * @param suggestions - the modules that the file has
- * @param file - the Elm file that was compiled
+ * @param file - the Elm files that were compiled, joined with commas
  * @returns the next step
  */
 function moduleNameFix(moduleName: string, suggestions: ReadonlyArray<string>, file: string): string {
