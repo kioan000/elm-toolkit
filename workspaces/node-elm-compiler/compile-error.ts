@@ -17,7 +17,7 @@ import * as path from 'node:path'
 import { CliError, Maybe, continuingSentence, splitFirstLine } from '@elm-toolkit/cli-lib'
 
 import { LoadError } from './load-error.ts'
-import { lookupLines } from './run-details.ts'
+import { type CompilerDetails, lookupLines } from './run-details.ts'
 
 /**
  * One failure of a call of the Elm compiler. Read it with a `switch` on `type_`,
@@ -44,18 +44,15 @@ export type CompileError =
   /** An option that this package does not know; `hint` says what to do instead, for example for an option that Elm 0.19 removed. */
   | { readonly hint: string; readonly option: string; readonly type_: 'UnknownOption' }
   /**
-   * The compiler binary could not start; `code` is the code of the system, such as ENOENT. `binary`
-   * is the file that the system found for `pathToElm`, or `Nothing` when it found none. `searchPath`
-   * holds the directories of the `PATH` that it searched, empty when `pathToElm` is a path.
+   * The compiler binary could not start; `code` is the code of the system, such as ENOENT.
+   * `details.lookup` says where the system looked for `pathToElm`, and the file it found, if any.
    */
   | {
-      readonly binary: Maybe<string>
       readonly cause: string
       readonly code: Maybe<string>
-      readonly cwd: string
+      readonly details: CompilerDetails
       readonly original: unknown
       readonly pathToElm: string
-      readonly searchPath: ReadonlyArray<string>
       readonly type_: 'CompilerNotStarted'
     }
   /**
@@ -66,6 +63,7 @@ export type CompileError =
    */
   | {
       readonly cause: string
+      readonly details: CompilerDetails
       readonly original: unknown
       readonly pathToElm: string
       readonly reason: 'maxBuffer' | 'signal' | 'timeout'
@@ -73,6 +71,7 @@ export type CompileError =
     }
   /** Elm ran on `sources` and reported problems; `output` holds the problems, as Elm wrote them. */
   | {
+      readonly details: CompilerDetails
       readonly exitCode: number | null
       readonly output: string
       readonly sources: ReadonlyArray<string>
@@ -170,7 +169,7 @@ function toCliError(error: CompileError): CliError {
         ],
       })
     case 'CompilerNotStarted':
-      return { ...startError(error), details: lookupLines(error) }
+      return { ...startError(error), details: lookupLines(error.details.lookup) }
     case 'CompilerStopped':
       return stoppedError(error.pathToElm, error.reason, error.cause)
     case 'CompileFailed':
@@ -480,7 +479,7 @@ export const CompileError = { title, toCliError }
  */
 function foundFile(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): Maybe<string> {
   // On Windows a name stays unresolved, so only an absolute path proves that a file was found.
-  return error.binary.andThen((binary) => (path.isAbsolute(binary) ? Maybe.Just(binary) : Maybe.Nothing))
+  return error.details.lookup.binary.andThen((binary) => (path.isAbsolute(binary) ? Maybe.Just(binary) : Maybe.Nothing))
 }
 
 /**
@@ -491,7 +490,7 @@ function foundFile(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>
  * @returns the error, with the step that fits a name or a path
  */
 function notFoundError(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): CliError {
-  return error.searchPath.length > 0
+  return error.details.lookup.searchPath.length > 0
     ? CliError.create({
         solution:
           'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
@@ -504,7 +503,7 @@ function notFoundError(error: Extract<CompileError, { type_: 'CompilerNotStarted
         solution: 'Check the path in pathToElm. A relative path starts from cwd.',
         summary: `"${error.pathToElm}"`,
         whatHappened: [
-          `The build tried to run ${path.resolve(error.cwd, error.pathToElm)}, and no file exists at that path.`,
+          `The build tried to run ${path.resolve(error.details.lookup.cwd, error.pathToElm)}, and no file exists at that path.`,
         ],
       })
 }

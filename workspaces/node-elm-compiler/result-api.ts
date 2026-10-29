@@ -50,11 +50,12 @@ import {
   startErrorMessage,
   systemMessages,
 } from './process.ts'
-import { type BinaryLookup, describeRun, findBinary, printRun } from './run-details.ts'
+import { type CompilerDetails, describeRun, printRun } from './run-details.ts'
 
 export { CompileError, type CompilerStartError } from './compile-error.ts'
 export { LoadError } from './load-error.ts'
 export type { CompilerOptions, CompilerProcessOptions, Sources } from './process.ts'
+export type { BinaryLookup, CompilerDetails } from './run-details.ts'
 
 // Elm itself recognises this output on every system, Windows included, and then writes nothing.
 const noOutput = '/dev/null'
@@ -98,7 +99,76 @@ const knownModules = new Set([
  * ```
  */
 export interface WorkerWithPorts {
+  /** The details of the run of the compiler that built the worker. */
+  readonly details: CompilerDetails
   ports: Record<string, unknown>
+}
+
+/**
+ * A compiler that `compile` started, with the details of its run.
+ *
+ * @example
+ *
+ * Wait for the compiler, and name the binary that ran
+ * ```TypeScript
+ *   const { compilerProcess, details }: StartedCompiler = …
+ *   compilerProcess.on('close', () => console.log(details.lookup.binary.withDefault('elm')))
+ * ```
+ */
+export interface StartedCompiler {
+  /** The process of `elm make`, already running. */
+  readonly compilerProcess: ChildProcess
+  readonly details: CompilerDetails
+}
+
+/**
+ * A run of `compileSync` that ended well: the messages of Elm, and the details
+ * of the run.
+ *
+ * @example
+ *
+ * Show what Elm printed
+ * ```TypeScript
+ *   const { messages }: CompilerMessages = …
+ *   console.log(messages) // 'Success! Compiled 1 module.'
+ * ```
+ */
+export interface CompilerMessages {
+  readonly details: CompilerDetails
+  /** The messages of Elm, empty when they went to the terminal. */
+  readonly messages: string
+}
+
+/**
+ * The JavaScript that Elm wrote, and the details of the run.
+ *
+ * @example
+ *
+ * Write the bundle where the server expects it
+ * ```TypeScript
+ *   const { javascript }: CompiledJavaScript = …
+ *   writeFileSync('public/main.js', javascript)
+ * ```
+ */
+export interface CompiledJavaScript {
+  readonly details: CompilerDetails
+  readonly javascript: string
+}
+
+/**
+ * A program that `dryCompile` checked: only the details of the run, because
+ * nothing is written.
+ *
+ * @example
+ *
+ * Name the compiler that checked the program
+ * ```TypeScript
+ *   const { details }: CheckedProgram = …
+ *   details.lookup.binary // Just '/app/node_modules/.bin/elm'
+ * ```
+ */
+export interface CheckedProgram {
+  readonly details: CompilerDetails
 }
 
 /**
@@ -144,6 +214,8 @@ export type ElmNamespace = Readonly<Record<string, ElmModule | undefined>>
  * ```
  */
 export interface RunnableProgram {
+  /** The details of the run of the compiler that built the program. */
+  readonly details: CompilerDetails
   /** The JavaScript that Elm wrote. */
   readonly javascript: string
   /** Runs the code in this process and returns its modules, without starting any. */
@@ -186,40 +258,44 @@ export function prepareProcessArgs(sources: Sources, options: CompilerOptions): 
  *
  * Build an application and react to its exit code
  * ```TypeScript
- *   compile('src/Main.elm', { output: 'dist/main.js' }).map((compiler) =>
- *     compiler.on('close', (exitCode) => console.log(exitCode === 0 ? 'built' : 'failed'))
+ *   compile('src/Main.elm', { output: 'dist/main.js' }).map(({ compilerProcess }) =>
+ *     compilerProcess.on('close', (exitCode) => console.log(exitCode === 0 ? 'built' : 'failed'))
  *   )
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
  * @param options - the flags for `elm make` and the settings of its process
- * @returns `Ok` the compiler process, already running, or `Err` for an option
- * that this package does not know, or for a `spawn` that throws
+ * @returns `Ok` the compiler process, already running, with the details of the
+ * run, or `Err` for an option that this package does not know, or for a
+ * `spawn` that throws
  */
-export function compile(sources: Sources, options: CompilerOptions): Result<CompileError, ChildProcess> {
+export function compile(sources: Sources, options: CompilerOptions): Result<CompileError, StartedCompiler> {
   const prepared = prepareOptions(options, options.spawn ?? spawn)
   const pathToElm = options.pathToElm || elmBinaryName
-
   const processOptions = prepareProcessOpts(prepared)
 
-  return processArgs(toList(sources), prepared).andThen((args) =>
-    Result.fromAttempt(() => {
+  return processArgs(toList(sources), prepared).andThen((args) => {
+    const details = describeRun(toList(sources), prepared, pathToElm, processOptions)
+
+    return Result.fromAttempt((): StartedCompiler => {
       if (prepared.verbose) {
-        printRun(pathToElm, args, describeRun(toList(sources), prepared, pathToElm, processOptions))
+        printRun(pathToElm, args, details)
       }
 
-      const compiler = (prepared.spawn as CompilerSpawn)(pathToElm, args, processOptions)
+      const compilerProcess = (prepared.spawn as CompilerSpawn)(pathToElm, args, processOptions)
 
       // A listener stops an error event from crashing the process; the message names the binary.
-      return compiler.on('error', (err: unknown) => {
+      compilerProcess.on('error', (err: unknown) => {
         if (err instanceof Error) {
           systemMessages.set(err, err.message)
           err.message = startErrorMessage(err, pathToElm)
-          Object.assign(err, { compileError: startError(err, findBinary(pathToElm, processOptions)) })
+          Object.assign(err, { compileError: startError(err, details) })
         }
-      }) as ChildProcess
-    }).mapError((caught) => startError(caught, findBinary(pathToElm, processOptions)))
-  )
+      })
+
+      return { compilerProcess: compilerProcess as ChildProcess, details }
+    }).mapError((caught) => startError(caught, details))
+  })
 }
 
 /**
@@ -237,31 +313,37 @@ export function compile(sources: Sources, options: CompilerOptions): Result<Comp
  * @param sources - one Elm file, or a list of Elm files that become one bundle
  * @param options - the flags for `elm make` and the settings of its process
  * @returns `Ok` the messages of the compiler, empty when they went to the
- * terminal, or `Err` when an option is unknown, the compiler cannot start, or
- * the build fails
+ * terminal, with the details of the run, or `Err` when an option is unknown,
+ * the compiler cannot start, or the build fails
  */
-export function compileSync(sources: Sources, options: CompilerOptions): Result<CompileError, string> {
+export function compileSync(sources: Sources, options: CompilerOptions): Result<CompileError, CompilerMessages> {
   const prepared = prepareOptions(options, options.spawn ?? spawnSyncAsCompilerSpawn)
   const pathToElm = options.pathToElm || elmBinaryName
   const processOptions = prepareProcessOpts(prepared)
 
-  return processArgs(toList(sources), prepared).andThen((args) =>
-    Result.fromAttempt(() => {
+  return processArgs(toList(sources), prepared).andThen((args) => {
+    const details = describeRun(toList(sources), prepared, pathToElm, processOptions)
+
+    return Result.fromAttempt(() => {
       if (prepared.verbose) {
-        printRun(pathToElm, args, describeRun(toList(sources), prepared, pathToElm, processOptions))
+        printRun(pathToElm, args, details)
       }
 
       return (prepared.spawn as CompilerSpawnSync)(pathToElm, args, { ...processOptions, encoding: 'utf8' })
     })
-      .mapError((caught) => startError(caught, findBinary(pathToElm, processOptions)))
-      .andThen((ran: SyncCompilerResult): Result<CompileError, string> => {
+      .mapError((caught) => startError(caught, details))
+      .andThen((ran: SyncCompilerResult): Result<CompileError, CompilerMessages> => {
         if (ran.error) {
-          return Result.Err(syncRunError(ran.error, findBinary(pathToElm, processOptions)))
+          return Result.Err(syncRunError(ran.error, details))
         }
 
-        return outcome(ran.status, String(ran.stdout ?? ''), String(ran.stderr ?? ''), sources)
+        return outcome(ran.status, String(ran.stdout ?? ''), String(ran.stderr ?? ''), sources, details).map(
+          (messages) => {
+            return { details, messages }
+          }
+        )
       })
-  )
+  })
 }
 
 /**
@@ -276,18 +358,19 @@ export function compileSync(sources: Sources, options: CompilerOptions): Result<
  * Compile an optimized bundle and write it where the server expects it
  * ```TypeScript
  *   const compileToStringResult = await compileToString('src/Main.elm', { optimize: true })
- *   compileToStringResult.map((javascript) => writeFileSync('public/main.js', javascript))
+ *   compileToStringResult.map(({ javascript }) => writeFileSync('public/main.js', javascript))
  * ```
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
  * @param options - the compiler options; `output` only selects the file extension
- * @returns `Ok` the generated JavaScript, or `Err` when an option is unknown, the
- * compiler cannot start, the build fails or its output cannot be read
+ * @returns `Ok` the generated JavaScript, with the details of the run, or `Err`
+ * when an option is unknown, the compiler cannot start, the build fails or its
+ * output cannot be read
  */
 export async function compileToString(
   sources: Sources,
   options: CompilerOptions
-): Promise<Result<CompileError, string>> {
+): Promise<Result<CompileError, CompiledJavaScript>> {
   const temporary = temporaryOutput(getSuffix(options.output, '.js'))
 
   if (temporary.type_ === 'Err') {
@@ -300,12 +383,16 @@ export async function compileToString(
     const built = await runToTheEnd(sources, { ...options, output })
 
     if (built.type_ === 'Err') {
-      return built
+      return Result.Err(built.error)
     }
 
-    return (await Result.fromPromise(readFile(output, { encoding: 'utf8' }))).mapError((caught): CompileError => {
-      return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
-    })
+    return (await Result.fromPromise(readFile(output, { encoding: 'utf8' })))
+      .mapError((caught): CompileError => {
+        return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
+      })
+      .map((javascript) => {
+        return { details: built.value, javascript }
+      })
   } finally {
     cleanupTempFileSync(output)
   }
@@ -325,16 +412,23 @@ export async function compileToString(
  *
  * @param sources - one Elm file, or a list of Elm files that become one bundle
  * @param options - the compiler options; `output` only selects the file extension
- * @returns `Ok` the generated JavaScript, or `Err` as `compileSync` describes, or
- * when the output cannot be read
+ * @returns `Ok` the generated JavaScript, with the details of the run, or `Err`
+ * as `compileSync` describes, or when the output cannot be read
  */
-export function compileToStringSync(sources: Sources, options: CompilerOptions): Result<CompileError, string> {
+export function compileToStringSync(
+  sources: Sources,
+  options: CompilerOptions
+): Result<CompileError, CompiledJavaScript> {
   return temporaryOutput(getSuffix(options.output, '.js')).andThen((output) => {
     try {
-      return compileSync(sources, { ...options, output }).andThen(() =>
-        Result.fromAttempt(() => readFileSync(output, { encoding: 'utf8' })).mapError((caught): CompileError => {
-          return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
-        })
+      return compileSync(sources, { ...options, output }).andThen(({ details }) =>
+        Result.fromAttempt(() => readFileSync(output, { encoding: 'utf8' }))
+          .mapError((caught): CompileError => {
+            return { cause: messageOf(caught), file: output, original: caught, type_: 'OutputNotRead' }
+          })
+          .map((javascript) => {
+            return { details, javascript }
+          })
       )
     } finally {
       cleanupTempFileSync(output)
@@ -363,11 +457,17 @@ export function compileToStringSync(sources: Sources, options: CompilerOptions):
  *
  * @param sources - one Elm file, or a list of Elm files
  * @param options - the compiler options; `output` and `docs` are ignored, because nothing is written
- * @returns `Ok` when the program compiles, or `Err` when an option is unknown,
- * the compiler cannot start, or the build fails, with the messages of Elm
+ * @returns `Ok` the details of the run when the program compiles, or `Err` when
+ * an option is unknown, the compiler cannot start, or the build fails, with the
+ * messages of Elm
  */
-export async function dryCompile(sources: Sources, options: CompilerOptions): Promise<Result<CompileError, void>> {
-  return (await runToTheEnd(sources, { ...options, docs: undefined, output: noOutput })).map(() => undefined)
+export async function dryCompile(
+  sources: Sources,
+  options: CompilerOptions
+): Promise<Result<CompileError, CheckedProgram>> {
+  return (await runToTheEnd(sources, { ...options, docs: undefined, output: noOutput })).map((details) => {
+    return { details }
+  })
 }
 
 /**
@@ -404,8 +504,8 @@ export async function compileRunnableProgram(
 ): Promise<Result<CompileError, RunnableProgram>> {
   const compiled = await compileToString(sources, { ...options, output: undefined })
 
-  return compiled.map((javascript) => {
-    return { javascript, load: () => loadJavaScript(javascript) }
+  return compiled.map(({ details, javascript }) => {
+    return { details, javascript, load: () => loadJavaScript(javascript) }
   })
 }
 
@@ -441,13 +541,14 @@ export async function compileWorker(
 ): Promise<Result<CompileError, WorkerWithPorts>> {
   const compiled = await compileRunnableProgram(modulePath, { cwd: projectRootDir })
 
-  return compiled
-    .andThen((program) =>
-      program.load().mapError((loadError): CompileError => {
+  return compiled.andThen((program) =>
+    program
+      .load()
+      .mapError((loadError): CompileError => {
         return { file: modulePath, loadError, type_: 'ProgramNotLoaded' }
       })
-    )
-    .andThen((elm) => startWorker(elm, modulePath, moduleName, workerArgs))
+      .andThen((elm) => startWorker(elm, modulePath, moduleName, workerArgs, program.details))
+  )
 }
 
 /**
@@ -498,13 +599,14 @@ function toList(sources: Sources): ReadonlyArray<string> {
  * @returns `Ok` the messages of the compiler, or `Err` when an option is
  * unknown, the compiler cannot start or is stopped, or the build fails
  */
-async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<Result<CompileError, string>> {
-  const pathToElm = options.pathToElm || elmBinaryName
+async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<Result<CompileError, CompilerDetails>> {
   const started = compile(sources, { ...options, processOpts: { ...options.processOpts, stdio: 'pipe' } })
 
   if (started.type_ === 'Err') {
     return Result.Err(started.error)
   }
+
+  const { details } = started.value
 
   const finished = await new Promise<{
     exitCode: number | null
@@ -513,7 +615,7 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
     stderr: string
     stdout: string
   }>((resolve) => {
-    const compiler: CompilerProcessLike = started.value
+    const compiler: CompilerProcessLike = started.value.compilerProcess
     const stdout = collectText(compiler.stdout)
     const stderr = collectText(compiler.stderr)
     let startFailure: unknown
@@ -537,14 +639,14 @@ async function runToTheEnd(sources: Sources, options: CompilerOptions): Promise<
   }
 
   if (finished.startFailure !== undefined) {
-    return Result.Err(startError(finished.startFailure, findBinary(pathToElm, prepareProcessOpts(options))))
+    return Result.Err(startError(finished.startFailure, details))
   }
 
   if (finished.exitCode === null && finished.signal !== null) {
-    return Result.Err(stoppedBySignal(finished.signal, options.processOpts, pathToElm))
+    return Result.Err(stoppedBySignal(finished.signal, options.processOpts, details))
   }
 
-  return outcome(finished.exitCode, finished.stdout, finished.stderr, sources)
+  return outcome(finished.exitCode, finished.stdout, finished.stderr, sources, details).map(() => details)
 }
 
 /**
@@ -570,22 +672,22 @@ function collectText(stream: NodeJS.ReadableStream | null | undefined): () => st
  * the compiler started, when the system stopped it at a limit of the options.
  *
  * @param err - the error of the run
- * @param lookup - the binary that was started, and where the system looked for it
+ * @param details - the details of the run
  * @returns a stopped compiler for a timeout or a full buffer, and a compiler
  * that did not start for anything else
  */
-function syncRunError(err: Error, lookup: BinaryLookup): CompileError {
+function syncRunError(err: Error, details: CompilerDetails): CompileError {
   const code = 'code' in err ? err.code : undefined
-  const { pathToElm } = lookup
+  const { pathToElm } = details.lookup
 
   switch (code) {
     case 'ETIMEDOUT':
-      return { cause: err.message, original: err, pathToElm, reason: 'timeout', type_: 'CompilerStopped' }
+      return { cause: err.message, details, original: err, pathToElm, reason: 'timeout', type_: 'CompilerStopped' }
     case 'ENOBUFS':
-      return { cause: err.message, original: err, pathToElm, reason: 'maxBuffer', type_: 'CompilerStopped' }
+      return { cause: err.message, details, original: err, pathToElm, reason: 'maxBuffer', type_: 'CompilerStopped' }
 
     default:
-      return startError(err, lookup)
+      return startError(err, details)
   }
 }
 
@@ -597,14 +699,19 @@ function syncRunError(err: Error, lookup: BinaryLookup): CompileError {
  * @param pathToElm - the binary that was started
  * @returns a stopped compiler, with `timeout` as the reason when the signal is the one of the timeout
  */
-function stoppedBySignal(signal: string, processOpts: CompilerOptions['processOpts'], pathToElm: string): CompileError {
+function stoppedBySignal(
+  signal: string,
+  processOpts: CompilerOptions['processOpts'],
+  details: CompilerDetails
+): CompileError {
   // At the timeout Node sends killSignal, and reports only the signal, as for any other stop.
   const timedOut = (processOpts?.timeout ?? 0) > 0 && signal === String(processOpts?.killSignal ?? 'SIGTERM')
 
   return {
     cause: signal,
+    details,
     original: signal,
-    pathToElm,
+    pathToElm: details.lookup.pathToElm,
     reason: timedOut ? 'timeout' : 'signal',
     type_: 'CompilerStopped',
   }
@@ -627,13 +734,15 @@ function outcome(
   exitCode: number | null,
   stdout: string,
   stderr: string,
-  sources: Sources
+  sources: Sources,
+  details: CompilerDetails
 ): Result<CompileError, string> {
   const messages = asTerminalShows(stdout)
 
   return exitCode === 0
     ? Result.Ok(messages)
     : Result.Err({
+        details,
         exitCode,
         output: stderr.trim() === '' ? messages : stderr,
         sources: toList(sources),
@@ -742,7 +851,8 @@ function startWorker(
   elm: ElmNamespace,
   modulePath: string,
   moduleName: string,
-  workerArgs: unknown
+  workerArgs: unknown,
+  details: CompilerDetails
 ): Result<CompileError, WorkerWithPorts> {
   const module_ = elm[moduleName]
 
@@ -758,7 +868,7 @@ function startWorker(
     .andThen((worker): Result<CompileError, WorkerWithPorts> =>
       // Elm leaves `ports` out entirely when a module declares none.
       worker.ports && Object.keys(worker.ports).length > 0
-        ? Result.Ok({ ...worker, ports: worker.ports })
+        ? Result.Ok({ ...worker, details, ports: worker.ports })
         : Result.Err({ file: modulePath, moduleName, type_: 'NoPorts' })
     )
 }

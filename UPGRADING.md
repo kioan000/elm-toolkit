@@ -9,6 +9,36 @@ only what needs an edit on your side.
 
 ## From 0.1.0-alpha.3 to 0.1.0-alpha.4
 
+**If you use the Result API of `node-elm-compiler`**, read the value of an `Ok`
+from its field. Every function that starts the compiler now returns an object,
+with the details of the run in `details`:
+
+| Function                                  | Before         | Now                             |
+| ----------------------------------------- | -------------- | ------------------------------- |
+| `compile`                                 | the process    | `{ compilerProcess, details }`  |
+| `compileSync`                             | the messages   | `{ details, messages }`         |
+| `compileToString`, `compileToStringSync`  | the JavaScript | `{ details, javascript }`       |
+| `dryCompile`                              | nothing        | `{ details }`                   |
+| `compileRunnableProgram`, `compileWorker` | an object      | the same object, with `details` |
+
+```diff
+ const compileToStringResult = await compileToString('src/Main.elm', options)
+
+-compileToStringResult.map((javascript) => writeFileSync('public/main.js', javascript))
++compileToStringResult.map(({ javascript }) => writeFileSync('public/main.js', javascript))
+```
+
+```diff
+-compile('src/Main.elm', options).map((compiler) => compiler.on('close', onClose))
++compile('src/Main.elm', options).map(({ compilerProcess }) => compilerProcess.on('close', onClose))
+```
+
+The old API, at the root of the package, returns what it returned before.
+
+The errors `CompilerNotStarted`, `CompilerStopped` and `CompileFailed` now
+carry `details` too. If you build one of them yourself, for example in a test,
+add that field.
+
 **If you run `elm-node-runner` with `--log-info`**, remove the option. It was
 deprecated in 0.1.0-alpha.3, and the runner now refuses it. To see which Elm
 binary the build runs, with its flags and folders, use `--verbose`:

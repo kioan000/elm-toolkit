@@ -38,7 +38,7 @@ async function compileFixture(name: string, mode: 'debug' | 'optimize'): Promise
 
   switch (compiled.type_) {
     case 'Ok':
-      return compiled.value
+      return compiled.value.javascript
     case 'Err':
       throw new Error(CliError.toString(CompileError.toCliError(compiled.error)))
   }
