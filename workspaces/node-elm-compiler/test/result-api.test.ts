@@ -682,6 +682,24 @@ describe('compileWorker', () => {
     assert.equal('Elm' in globalThis, false)
   })
 
+  it('prints the details of the run with verbose, from the options of the compiler', async (t) => {
+    const printed = t.mock.method(console, 'info', () => undefined)
+
+    t.mock.method(console, 'log', () => undefined)
+
+    valueOf(
+      await compileWorker({
+        compilerOptions: { ...inApp, verbose: true },
+        moduleName: 'Doubler',
+        sources: 'src/Doubler.elm',
+        workerArgs: { flags: 3 },
+      })
+    )
+
+    assert.match(String(printed.mock.calls[0]?.arguments[1]), /^elm make src\/Doubler\.elm /)
+    assert.match(String(printed.mock.calls[1]?.arguments[0]), new RegExp(`Binary: +${elm}\n`))
+  })
+
   it('accepts a project directory relative to the working directory of the process', async () => {
     const pathWithElm = `${path.dirname(elm)}${path.delimiter}${process.env.PATH ?? ''}`
     const worker = valueOf(
