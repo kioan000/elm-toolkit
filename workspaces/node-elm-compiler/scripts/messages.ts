@@ -37,10 +37,13 @@ import {
   findAllDependencies,
   prepareProcessArgs,
 } from '../result-api.ts'
+import { describeRun } from '../run-details.ts'
 
 const elm = findElmBinary(import.meta.url)
 const app = path.join(import.meta.dirname, '..', 'test', 'fixtures', 'app')
 const inApp: CompilerOptions = { cwd: app, pathToElm: elm }
+// The details of a run, for the errors that the script builds by hand.
+const handBuiltDetails = describeRun(['src/Main.elm'], inApp, elm, { cwd: app, env: process.env })
 const scratch = mkdtempSync(path.join(tmpdir(), 'node-elm-compiler-messages-'))
 
 /**
@@ -109,8 +112,7 @@ function withoutDevModeWarning<A>(run: () => A | Promise<A>): Promise<A> {
 }
 
 /**
- * Starts a worker from the fixture project. `compileWorker` has no option to
- * choose the binary, so the pinned compiler goes first on the `PATH`.
+ * Starts a worker from the fixture project, with the pinned compiler.
  *
  * @param file - the name of the Elm file in `src`, without the extension
  * @param moduleName - the module to start
@@ -118,9 +120,7 @@ function withoutDevModeWarning<A>(run: () => A | Promise<A>): Promise<A> {
  * @returns whatever `compileWorker` returns
  */
 function startWorker(file: string, moduleName: string, workerArgs?: unknown): ReturnType<typeof compileWorker> {
-  return withEnv({ PATH: `${path.dirname(elm)}${path.delimiter}${process.env.PATH ?? ''}` }, () =>
-    compileWorker(app, `src/${file}.elm`, moduleName, workerArgs)
-  )
+  return compileWorker({ compilerOptions: inApp, moduleName, sources: `src/${file}.elm`, workerArgs })
 }
 
 /**
@@ -247,6 +247,7 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
 
       return {
         cause,
+        details: handBuiltDetails,
         file: '/tmp/node-elm-compiler-x1/elm-output.js',
         original: new Error(cause),
         type_: 'OutputNotRead',
@@ -270,7 +271,12 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
   [
     'ProgramNotLoaded: no Elm object (LoadError NoElmObject, built by hand, because no call can cause it on purpose)',
     (): CompileError => {
-      return { file: 'src/Main.elm', loadError: { type_: 'NoElmObject' }, type_: 'ProgramNotLoaded' }
+      return {
+        details: handBuiltDetails,
+        loadError: { type_: 'NoElmObject' },
+        sources: ['src/Main.elm'],
+        type_: 'ProgramNotLoaded',
+      }
     },
   ],
   [

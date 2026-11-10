@@ -54,6 +54,13 @@ and it cannot clash with a field of data called `type`, such as the one in
 The rule covers only the discriminant. A union of strings that is data, such as
 the `reason` of a stopped compiler, keeps its own names.
 
+## Values of a Result
+
+The value of an `Ok` in a public API is an object, not a bare string, number or
+array. A new field can then join the object without a breaking change. For
+example, `compileToString` returns `{ details, javascript }`, not the JavaScript
+alone.
+
 ## Documentation
 
 ### How to comment
