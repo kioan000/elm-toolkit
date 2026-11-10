@@ -726,7 +726,7 @@ function syncRunError(err: Error, details: CompilerDetails): CompileError {
  *
  * @param signal - the name of the signal, such as SIGTERM
  * @param processOpts - the options of the process, which may set a timeout
- * @param pathToElm - the binary that was started
+ * @param details - the details of the run, with the binary that was started
  * @returns a stopped compiler, with `timeout` as the reason when the signal is the one of the timeout
  */
 function stoppedBySignal(
@@ -758,7 +758,9 @@ function stoppedBySignal(
  * @param stdout - what the compiler wrote to stdout
  * @param stderr - what the compiler wrote to stderr
  * @param sources - the Elm files, for the error
- * @returns `Ok` the messages of stdout, or `Err` with the problems of stderr
+ * @param details - the details of the run, which a failed build carries
+ * @returns `Ok` the messages of stdout, or `Err` with the problems of stderr and
+ * the details of the run
  */
 function outcome(
   exitCode: number | null,
