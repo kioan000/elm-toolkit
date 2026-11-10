@@ -22,7 +22,12 @@ import * as os from 'node:os'
 import type { LoaderContext } from 'webpack'
 
 import { CliError } from '@elm-toolkit/cli-lib'
-import { CompileError, compile, findAllDependencies } from '@elm-toolkit/node-elm-compiler/result-api'
+import {
+  CompileError,
+  type CompilerStartError,
+  compile,
+  findAllDependencies,
+} from '@elm-toolkit/node-elm-compiler/result-api'
 
 import { inject } from './hot/inject.ts'
 
@@ -67,7 +72,7 @@ export interface ElmLoaderOptions {
   report?: string
   /** Options for the runtime of the compiler, passed between `+RTS` and `-RTS`. */
   runtimeOptions?: ReadonlyArray<string>
-  /** Prints the compiler command before it runs. */
+  /** Prints the compiler command before it runs, with the binary that runs, the flags, the working directory and the `ELM_HOME`. */
   verbose?: boolean
 }
 
@@ -267,6 +272,20 @@ function getSuffix(outputPath: string | undefined, defaultSuffix: string): strin
 }
 
 /**
+ * Turns a compile error into an error for webpack, with the message that a
+ * person reads. The stack is hidden, because the error describes the build,
+ * not a bug of the loader.
+ *
+ * @param error - the compile error
+ * @returns the error to pass to webpack
+ */
+function webpackError(error: CompileError): Error {
+  return Object.assign(new Error(CliError.toString(CompileError.toCliError(error), CompileError.title(error))), {
+    hideStack: true,
+  })
+}
+
+/**
  * Compile Elm sources to JavaScript.
  *
  * @param sources - Source files to compile
@@ -295,7 +314,7 @@ async function compileElm(sources: string[], options: ReceivedOptions): Promise<
     switch (started.type_) {
       case 'Err':
         fs.rmSync(tempDir, { force: true, recursive: true })
-        reject(new Error(CliError.toString(CompileError.toCliError(started.error), CompileError.title(started.error))))
+        reject(webpackError(started.error))
 
         return
       case 'Ok': {
@@ -321,9 +340,10 @@ async function compileElm(sources: string[], options: ReceivedOptions): Promise<
           })
         })
 
-        compiler.on('error', (err) => {
+        // A compiler that cannot start is known only here, with the compile error that describes it.
+        compiler.on('error', (err: Error | CompilerStartError) => {
           fs.rmSync(tempDir, { force: true, recursive: true })
-          reject(err)
+          reject('compileError' in err ? webpackError(err.compileError) : err)
         })
       }
     }

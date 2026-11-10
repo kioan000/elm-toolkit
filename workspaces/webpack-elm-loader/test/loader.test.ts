@@ -173,10 +173,13 @@ describe('the Elm loader', () => {
     assert.deepEqual(temporaryDirectories(), before)
   })
 
-  it('passes a missing compiler to webpack as an error instead of crashing', async () => {
+  it('passes a missing compiler to webpack as an error that says where it looked, without a stack', async () => {
     const run = await runLoader({ query: { ...inProject, pathToElm: missingElm } })
 
-    assert.match(run.error?.message ?? '', /Could not find Elm compiler/)
+    assert.match(run.error?.message ?? '', /Elm compiler not found: /)
+    assert.match(run.error?.message ?? '', new RegExp(`tried to run ${missingElm}, and no file exists at that path`))
+    assert.match(run.error?.message ?? '', new RegExp(`CWD: +${project}`))
+    assert.equal((run.error as { hideStack?: boolean } | null)?.hideStack, true)
   })
 
   for (const [kind, elmHome, expected] of [
@@ -244,7 +247,7 @@ describe('the Elm loader', () => {
     try {
       const run = await runLoader({ query: { cwd: directory, pathToElm: missingElm }, watching: true })
 
-      assert.match(run.error?.message ?? '', /Could not find Elm compiler/, 'the error should come from the compiler')
+      assert.match(run.error?.message ?? '', /Elm compiler not found: /, 'the error should come from the compiler')
       assert.deepEqual(run.contextDependencies, [])
     } finally {
       rmSync(directory, { force: true, recursive: true })

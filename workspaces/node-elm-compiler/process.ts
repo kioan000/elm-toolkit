@@ -18,6 +18,7 @@ import * as process from 'node:process'
 import { Maybe, Result } from '@elm-toolkit/cli-lib'
 
 import type { CompileError } from './compile-error.ts'
+import type { BinaryLookup } from './run-details.ts'
 
 /** The binary that runs when `pathToElm` is not given. */
 export const elmBinaryName = 'elm'
@@ -280,17 +281,20 @@ export const systemMessages = new WeakMap<Error, string>()
  * Describes a compiler that could not start, as a compile error.
  *
  * @param err - what the start threw or emitted
- * @param pathToElm - the binary that was started
+ * @param lookup - the binary that was started, and where the system looked for it
  * @returns the error, with the code of the system when there is one
  */
-export function startError(err: unknown, pathToElm: string): CompileError {
+export function startError(err: unknown, lookup: BinaryLookup): CompileError {
   const code = typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : ''
 
   return {
+    binary: lookup.binary,
     cause: err instanceof Error ? (systemMessages.get(err) ?? err.message) : String(err),
     code: code === '' ? Maybe.Nothing : Maybe.Just(code),
+    cwd: lookup.cwd,
     original: err,
-    pathToElm,
+    pathToElm: lookup.pathToElm,
+    searchPath: lookup.searchPath,
     type_: 'CompilerNotStarted',
   }
 }
