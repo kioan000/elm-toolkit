@@ -12,6 +12,8 @@
  * @packageDocumentation
  */
 
+import * as path from 'node:path'
+
 import { CliError, Maybe, continuingSentence, splitFirstLine } from '@elm-toolkit/cli-lib'
 
 import { LoadError } from './load-error.ts'
@@ -383,22 +385,20 @@ function startError(error: Extract<CompileError, { type_: 'CompilerNotStarted' }
 
   switch (error.code.withDefault('')) {
     case 'ENOENT':
-      return error.searchPath.length > 0
-        ? CliError.create({
-            solution:
-              'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
-            summary: `"${pathToElm}"`,
-            whatHappened: [
-              `The build looked for "${pathToElm}" in each folder of the PATH, in the order below, and found no program with that name.`,
-            ],
-          })
-        : CliError.create({
-            solution: 'Check the path in pathToElm. A relative path starts from cwd.',
-            summary: `"${pathToElm}"`,
-            whatHappened: [
-              `The build tried to run ${error.binary.withDefault(pathToElm)}, and no file exists at that path.`,
-            ],
-          })
+      return (
+        foundFile(error)
+          // The file exists, so the missing piece is the working directory or the interpreter of a script.
+          .map((file) =>
+            CliError.create({
+              solution: `Check that the folder in cwd exists. If ${file} is a script, check that the program on its first line is installed.`,
+              summary: `"${pathToElm}"`,
+              whatHappened: [
+                `The build found ${file}, but the system could not start it, and reported that something does not exist.`,
+              ],
+            })
+          )
+          .withDefault(notFoundError(error))
+      )
     case 'EACCES':
       return CliError.create({
         solution: `Make it executable with \`chmod +x ${pathToElm}\`, then try again.`,
@@ -470,3 +470,41 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
  * ```
  */
 export const CompileError = { title, toCliError }
+
+/**
+ * Finds the file that the system started for a compiler that did not start,
+ * when one exists.
+ *
+ * @param error - the compiler that did not start
+ * @returns `Just` the absolute path of the file, or `Nothing` when no file was found
+ */
+function foundFile(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): Maybe<string> {
+  // On Windows a name stays unresolved, so only an absolute path proves that a file was found.
+  return error.binary.andThen((binary) => (path.isAbsolute(binary) ? Maybe.Just(binary) : Maybe.Nothing))
+}
+
+/**
+ * Describes a compiler that the system did not find: a name in no folder of
+ * the `PATH`, or a path to no file.
+ *
+ * @param error - the compiler that did not start
+ * @returns the error, with the step that fits a name or a path
+ */
+function notFoundError(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): CliError {
+  return error.searchPath.length > 0
+    ? CliError.create({
+        solution:
+          'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
+        summary: `"${error.pathToElm}"`,
+        whatHappened: [
+          `The build looked for "${error.pathToElm}" in each folder of the PATH, in the order below, and found no program with that name.`,
+        ],
+      })
+    : CliError.create({
+        solution: 'Check the path in pathToElm. A relative path starts from cwd.',
+        summary: `"${error.pathToElm}"`,
+        whatHappened: [
+          `The build tried to run ${path.resolve(error.cwd, error.pathToElm)}, and no file exists at that path.`,
+        ],
+      })
+}

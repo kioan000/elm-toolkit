@@ -177,7 +177,8 @@ describe('the Elm loader', () => {
     const run = await runLoader({ query: { ...inProject, pathToElm: missingElm } })
 
     assert.match(run.error?.message ?? '', /Elm compiler not found: /)
-    assert.match(run.error?.message ?? '', new RegExp(`no file exists at that path[\\s\\S]*Binary: +${missingElm}`))
+    assert.match(run.error?.message ?? '', new RegExp(`tried to run ${missingElm}, and no file exists at that path`))
+    assert.match(run.error?.message ?? '', new RegExp(`CWD: +${project}`))
     assert.equal((run.error as { hideStack?: boolean } | null)?.hideStack, true)
   })
 

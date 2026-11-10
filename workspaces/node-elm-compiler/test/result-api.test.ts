@@ -168,7 +168,7 @@ describe('compile', () => {
       error.compileError.type_ === 'CompilerNotStarted'
         ? [error.compileError.binary, error.compileError.code, error.compileError.cause]
         : undefined,
-      [Maybe.Just(missingElm), Maybe.Just('ENOENT'), `spawn ${missingElm} ENOENT`]
+      [Maybe.Nothing, Maybe.Just('ENOENT'), `spawn ${missingElm} ENOENT`]
     )
 
     const reported = errorOf(await dryCompile(source('Main'), { ...inApp, pathToElm: missingElm }))
@@ -217,7 +217,7 @@ describe('compile', () => {
     })
 
     assert.deepEqual(errorOf(outcome), {
-      binary: Maybe.Just('/opt/elm'),
+      binary: Maybe.Nothing,
       cause: 'spawn EACCES',
       code: Maybe.Just('EACCES'),
       cwd: process.cwd(),
@@ -813,7 +813,7 @@ describe('CompileError.toCliError', () => {
   it('names the file that a missing path points to, and asks to check pathToElm', () => {
     const error = CompileError.toCliError({
       ...notStarted,
-      binary: Maybe.Just('/app/node_modules/.bin/elm'),
+      binary: Maybe.Nothing,
       pathToElm: 'node_modules/.bin/elm',
       searchPath: [],
     })
@@ -821,8 +821,17 @@ describe('CompileError.toCliError', () => {
     assert.deepEqual(error.whatHappened, [
       'The build tried to run /app/node_modules/.bin/elm, and no file exists at that path.',
     ])
-    assert.deepEqual(error.details, ['Binary:  /app/node_modules/.bin/elm', 'CWD:     /app'])
+    assert.deepEqual(error.details, ['CWD:  /app'])
     assert.equal(error.solution.withDefault(''), 'Check the path in pathToElm. A relative path starts from cwd.')
+  })
+
+  it('does not ask to install Elm when the system found the file but could not start it', () => {
+    const error = CompileError.toCliError({ ...notStarted, binary: Maybe.Just('/app/node_modules/.bin/elm') })
+
+    assert.deepEqual(error.whatHappened, [
+      'The build found /app/node_modules/.bin/elm, but the system could not start it, and reported that something does not exist.',
+    ])
+    assert.match(error.solution.withDefault(''), /^Check that the folder in cwd exists\./)
   })
 
   it('points to the timeout option when the system stopped the compiler', () => {

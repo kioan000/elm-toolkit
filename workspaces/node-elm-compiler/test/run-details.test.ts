@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 
 import { Maybe, findElmBinary } from '@elm-toolkit/cli-lib'
 
-import { compileSync } from '../result-api.ts'
+import { CompileError, compileSync } from '../result-api.ts'
 import { describeRun, findBinary, lookupLines, printRun } from '../run-details.ts'
 
 const elm = findElmBinary(import.meta.url)
@@ -77,10 +77,17 @@ describe('findBinary', () => {
     })
   })
 
-  it('keeps a path that does not exist, so that the error can name it', () => {
+  it('finds no binary for a path that points to no file', () => {
     const lookup = findBinary('/opt/no-such-elm', { cwd: project, env: {} })
 
-    assert.deepEqual(lookup.binary, Maybe.Just('/opt/no-such-elm'))
+    assert.deepEqual(lookup.binary, Maybe.Nothing)
+    assert.deepEqual(lookup.searchPath, [])
+  })
+
+  it('searches the default folders of the system when the PATH is not set, as spawn does', () => {
+    const lookup = findBinary('elm', { cwd: project, env: {} })
+
+    assert.deepEqual(lookup.searchPath, ['/usr/bin', '/bin'])
   })
 })
 
@@ -185,12 +192,35 @@ describe('a compiler that does not start', () => {
   })
 })
 
+describe('a compiler that the system found but could not start', () => {
+  it('names the file, and points to the working directory', () => {
+    const outcome = compileSync(path.join(app, 'src', 'Main.elm'), {
+      cwd: path.join(root, 'no-such-folder'),
+      pathToElm: elm,
+      processOpts: { stdio: 'pipe' },
+    })
+    const error = outcome.type_ === 'Err' ? CompileError.toCliError(outcome.error) : undefined
+
+    assert.deepEqual(error?.whatHappened, [
+      `The build found ${elm}, but the system could not start it, and reported that something does not exist.`,
+    ])
+  })
+})
+
 describe('lookupLines', () => {
   it('lists the folders that the system searched for a name that it did not find', () => {
     assert.deepEqual(
       lookupLines({ binary: Maybe.Nothing, cwd: project, pathToElm: 'elm', searchPath: ['/usr/bin', '/bin'] }),
       ['Searched:  /usr/bin', '           /bin', `CWD:       ${project}`]
     )
+  })
+
+  it('names an empty entry of the PATH as the working directory', () => {
+    assert.deepEqual(lookupLines({ binary: Maybe.Nothing, cwd: project, pathToElm: 'elm', searchPath: ['', '/bin'] }), [
+      'Searched:  (empty entry: the CWD)',
+      '           /bin',
+      `CWD:       ${project}`,
+    ])
   })
 
   it('shows the PATH only when the command is a name', () => {

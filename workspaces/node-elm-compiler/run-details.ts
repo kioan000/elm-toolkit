@@ -36,13 +36,13 @@ import type { CompilerOptions, CompilerProcessOptions } from './process.ts'
  * ```
  */
 export type BinaryLookup = {
-  /** The absolute path of the file that runs, or `Nothing` when no file was found. */
+  /** The absolute path of the file that runs, or `Nothing` when no file exists there. On Windows, a name as it is. */
   readonly binary: Maybe<string>
   /** The absolute working directory of the compiler. */
   readonly cwd: string
   /** The command as the options give it, such as `elm` or `node_modules/.bin/elm`. */
   readonly pathToElm: string
-  /** The folders of the `PATH`, in the order of the search, when the command is a name; empty for a path. */
+  /** The folders of the `PATH`, in the order of the search, when the command is a name; empty for a path. An empty entry is the working directory. */
   readonly searchPath: ReadonlyArray<string>
 }
 
@@ -110,10 +110,12 @@ export function findBinary(pathToElm: string, processOptions: CompilerProcessOpt
 
   // Windows takes both separators, so a path written with `/` is a path there too.
   if (pathToElm.includes('/') || pathToElm.includes(path.sep)) {
-    return { binary: Maybe.Just(path.resolve(cwd, pathToElm)), cwd, pathToElm, searchPath: [] }
+    const file = path.resolve(cwd, pathToElm)
+
+    return { binary: isFile(file) ? Maybe.Just(file) : Maybe.Nothing, cwd, pathToElm, searchPath: [] }
   }
 
-  const searchPath = (processOptions.env?.PATH ?? '').split(path.delimiter)
+  const searchPath = searchPathOf(processOptions.env ?? {}).split(path.delimiter)
 
   if (process.platform === 'win32') {
     return { binary: Maybe.Just(pathToElm), cwd, pathToElm, searchPath }
@@ -233,7 +235,7 @@ export function printRun(pathToElm: string, args: ReadonlyArray<string>, details
 export function lookupLines(lookup: BinaryLookup): ReadonlyArray<string> {
   return labelledLines([
     ['Binary:', lookup.binary.map((binary) => [binary]).withDefault([])],
-    ['Searched:', lookup.searchPath],
+    ['Searched:', lookup.searchPath.map((directory) => (directory === '' ? '(empty entry: the CWD)' : directory))],
     ['CWD:', [lookup.cwd]],
   ])
 }
@@ -261,7 +263,41 @@ function labelledLines(entries: ReadonlyArray<readonly [string, ReadonlyArray<st
  * @returns the path of the file, or why there is none
  */
 function binaryText(lookup: BinaryLookup): string {
-  return lookup.binary.withDefault(`"${lookup.pathToElm}" not found on PATH`)
+  return lookup.binary.withDefault(
+    lookup.searchPath.length > 0
+      ? `"${lookup.pathToElm}" not found on PATH`
+      : `no file at ${path.resolve(lookup.cwd, lookup.pathToElm)}`
+  )
+}
+
+/**
+ * Reads the `PATH` that the compiler receives. Windows names the variable
+ * without regard to case, often `Path`, and a copy of the environment keeps
+ * only the spelling it has.
+ *
+ * @param env - the environment of the compiler
+ * @returns the value of the `PATH`, or the default of the system when none is set
+ */
+function searchPathOf(env: NodeJS.ProcessEnv): string {
+  const key = process.platform === 'win32' ? Object.keys(env).find((name) => name.toUpperCase() === 'PATH') : 'PATH'
+  const value = key === undefined ? undefined : env[key]
+
+  // Without a PATH, spawn searches the default folders of the system, not the working directory.
+  return value ?? (process.platform === 'win32' ? '' : ['/usr/bin', '/bin'].join(path.delimiter))
+}
+
+/**
+ * Tells whether a path is a file, whether or not it can run.
+ *
+ * @param candidate - the path to check
+ * @returns true for a file
+ */
+function isFile(candidate: string): boolean {
+  try {
+    return statSync(candidate).isFile()
+  } catch {
+    return false
+  }
 }
 
 /**
