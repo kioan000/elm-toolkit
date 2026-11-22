@@ -34,9 +34,9 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 - `CompilerDetails`, the type of `details`: the binary that ran and where the
   system looked for it, the sources, the flags, the working directory and the
-  `ELM_HOME`. `StartedCompiler`, `CompilerMessages`, `CompiledJavaScript` and
-  `CheckedProgram` are the types of the new values, and `WorkerSpec` is the
-  record of `compileWorker`.
+  `ELM_HOME`. `BinaryLookup` is the type of `details.lookup`. `StartedCompiler`,
+  `CompilerMessages`, `CompiledJavaScript` and `CheckedProgram` are the types of
+  the new values, and `WorkerSpec` is the record of `compileWorker`.
 
 **Changed**
 
