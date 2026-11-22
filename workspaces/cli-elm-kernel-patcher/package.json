@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@elm-toolkit/cli-lib": "workspace:^",
-    "commander": "^15.0.0"
+    "commander": "^15.1.0"
   },
   "devDependencies": {
     "ajv": "^8.20.0",
