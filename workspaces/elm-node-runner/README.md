@@ -100,7 +100,9 @@ Node can strip, so no `enum`, and it lives in your project, not in
 ## Options and errors
 
 `--optimize` builds with `elm make --optimize`. `--help` lists every option.
-`--log-info` is deprecated: an error already shows the messages of Elm.
+`--verbose` prints, before the build, the binary that runs, the flags, the
+working directory and the `ELM_HOME`. Use it when the build runs another Elm
+than the one you expect.
 
 Elm runs in the current directory, so start the runner from the Elm project or
 from a folder below it. The messages of Elm stay hidden while it builds. When

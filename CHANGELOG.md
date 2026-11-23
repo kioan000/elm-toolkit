@@ -8,6 +8,72 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
+#### node-elm-compiler
+
+**Breaking changes**
+
+- Every function of the Result API that starts the compiler returns an object,
+  with the details of the run in `details`. `compileToString` and
+  `compileToStringSync` return `{ details, javascript }`, `compileSync` returns
+  `{ details, messages }`, `dryCompile` returns `{ details }`, and `compile`
+  returns `{ compilerProcess, details }`. `compileRunnableProgram` and
+  `compileWorker` add `details` to the objects they returned. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+- Every error that comes from a run of the compiler carries the same `details`:
+  `CompilerNotStarted`, `CompilerStopped`, `CompileFailed`, `OutputNotRead`,
+  `ProgramNotLoaded`, `ModuleNotFound`, `WorkerNotStarted` and `NoPorts`. The
+  errors of `compileWorker` name the compiled files in `sources`, instead of
+  `file`.
+- `compileWorker` of the Result API takes one record:
+  `{ compilerOptions, moduleName, sources, workerArgs }`. It now accepts the
+  options of the other functions, such as `verbose` and `pathToElm`. The
+  project folder moves to `compilerOptions.cwd`. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+
+**Added**
+
+- `CompilerDetails`, the type of `details`: the binary that ran and where the
+  system looked for it, the sources, the flags, the working directory and the
+  `ELM_HOME`. `BinaryLookup` is the type of `details.lookup`. `StartedCompiler`,
+  `CompilerMessages`, `CompiledJavaScript` and `CheckedProgram` are the types of
+  the new values, and `WorkerSpec` is the record of `compileWorker`.
+
+**Changed**
+
+- With `verbose`, the `> Running:` line comes with a summary of the run: the
+  file of the binary that runs, the sources, the flags, the working directory
+  and the `ELM_HOME`. When several Elm installations exist, it shows which one
+  the build uses. See [#20](https://github.com/kioan000/elm-toolkit/issues/20).
+- `compileSync` of the Result API now prints this summary with `verbose` too.
+  Before, it printed nothing.
+- A compiler that cannot start now says where the system looked for it: the file
+  that it found, or that it found none, the working directory, and the `PATH`.
+  The data is in `details.lookup` of the error.
+- The `'error'` event of a process from `compile` now carries the failure as a
+  `CompileError`, in `compileError`. The new type `CompilerStartError` describes
+  that event. Its message stays the same.
+
+#### webpack-elm-loader
+
+**Changed**
+
+- `verbose` shows the summary of each compiler run, with the binary that runs.
+- A compiler that cannot start gives the same error as node-elm-compiler, with
+  the folders that the system searched, and without a stack trace. Before, the
+  message was only "Could not find Elm compiler".
+
+#### elm-node-runner
+
+**Breaking changes**
+
+- `--log-info` is removed. To see how the build runs, use `--verbose`. See
+  [UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4).
+
+**Added**
+
+- `--verbose`, which prints the binary that runs, the flags, the working
+  directory and the `ELM_HOME` of the build.
+
 ## [0.1.0-alpha.3] - 2026-10-11
 
 ### What's new

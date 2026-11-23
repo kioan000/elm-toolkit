@@ -12,9 +12,12 @@
  * @packageDocumentation
  */
 
+import * as path from 'node:path'
+
 import { CliError, Maybe, continuingSentence, splitFirstLine } from '@elm-toolkit/cli-lib'
 
 import { LoadError } from './load-error.ts'
+import { type CompilerDetails, lookupLines } from './run-details.ts'
 
 /**
  * One failure of a call of the Elm compiler. Read it with a `switch` on `type_`,
@@ -40,10 +43,14 @@ import { LoadError } from './load-error.ts'
 export type CompileError =
   /** An option that this package does not know; `hint` says what to do instead, for example for an option that Elm 0.19 removed. */
   | { readonly hint: string; readonly option: string; readonly type_: 'UnknownOption' }
-  /** The compiler binary could not start; `code` is the code of the system, such as ENOENT. */
+  /**
+   * The compiler binary could not start; `code` is the code of the system, such as ENOENT.
+   * `details.lookup` says where the system looked for `pathToElm`, and the file it found, if any.
+   */
   | {
       readonly cause: string
       readonly code: Maybe<string>
+      readonly details: CompilerDetails
       readonly original: unknown
       readonly pathToElm: string
       readonly type_: 'CompilerNotStarted'
@@ -56,6 +63,7 @@ export type CompileError =
    */
   | {
       readonly cause: string
+      readonly details: CompilerDetails
       readonly original: unknown
       readonly pathToElm: string
       readonly reason: 'maxBuffer' | 'signal' | 'timeout'
@@ -63,6 +71,7 @@ export type CompileError =
     }
   /** Elm ran on `sources` and reported problems; `output` holds the problems, as Elm wrote them. */
   | {
+      readonly details: CompilerDetails
       readonly exitCode: number | null
       readonly output: string
       readonly sources: ReadonlyArray<string>
@@ -76,33 +85,68 @@ export type CompileError =
       readonly type_: 'TempFolderNotCreated'
     }
   /** The file that the compiler wrote could not be read. */
-  | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'OutputNotRead' }
+  | {
+      readonly cause: string
+      readonly details: CompilerDetails
+      readonly file: string
+      readonly original: unknown
+      readonly type_: 'OutputNotRead'
+    }
   /**
    * `compileWorker` found no module `moduleName` to start. `suggestions` has the
    * full names, such as `Tools.Echo`. A name with a dot always ends here.
    */
   | {
-      readonly file: string
+      readonly details: CompilerDetails
       readonly moduleName: string
+      readonly sources: ReadonlyArray<string>
       readonly suggestions: ReadonlyArray<string>
       readonly type_: 'ModuleNotFound'
     }
-  /** `compileWorker` compiled `file`, and its code failed while it loaded. */
-  | { readonly file: string; readonly loadError: LoadError; readonly type_: 'ProgramNotLoaded' }
+  /** `compileWorker` compiled `sources`, and their code failed while it loaded. */
+  | {
+      readonly details: CompilerDetails
+      readonly loadError: LoadError
+      readonly sources: ReadonlyArray<string>
+      readonly type_: 'ProgramNotLoaded'
+    }
   /** The `init` of the module threw, most often because of flags of the wrong type. */
   | {
       readonly cause: string
-      readonly file: string
+      readonly details: CompilerDetails
       readonly moduleName: string
       readonly original: unknown
+      readonly sources: ReadonlyArray<string>
       readonly type_: 'WorkerNotStarted'
     }
   /** The module has no ports, so Node cannot talk to it. */
-  | { readonly file: string; readonly moduleName: string; readonly type_: 'NoPorts' }
+  | {
+      readonly details: CompilerDetails
+      readonly moduleName: string
+      readonly sources: ReadonlyArray<string>
+      readonly type_: 'NoPorts'
+    }
   /** The Elm file to start from could not be read. */
   | { readonly cause: string; readonly file: string; readonly original: unknown; readonly type_: 'EntryNotRead' }
   /** The first line of the Elm file is not a valid module declaration. */
   | { readonly file: string; readonly type_: 'InvalidModule' }
+
+/**
+ * The error that a compiler process from `compile` emits when it cannot start,
+ * for example because the binary does not exist. Its message keeps the words
+ * of the original package; `compileError` holds the same failure as a
+ * `CompileError`, with the place where the system looked for the binary.
+ *
+ * @example
+ *
+ * Report a compiler that did not start
+ * ```TypeScript
+ *   compiler.on('error', (err: CompilerStartError) =>
+ *     CliError.print(CompileError.title(err.compileError), CompileError.toCliError(err.compileError))
+ *   )
+ * ```
+ */
+export type CompilerStartError = Error & { readonly compileError: CompileError }
 
 /**
  * Describes a compile error for a person. The summary adds only the detail to
@@ -117,7 +161,12 @@ export type CompileError =
  *   // ERROR:Elm compiler not found "elm"
  *   //
  *   //     What happened:
- *   //         The build tried to run "elm", and the system found no program with that name or path.
+ *   //         The build looked for "elm" in each folder of the PATH, in the order below, and found no program with that name.
+ *   //
+ *   //     Details:
+ *   //         Searched:  /app/node_modules/.bin
+ *   //                    /usr/bin
+ *   //         CWD:       /app
  *   //
  *   //     How to fix:
  *   //         Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.
@@ -138,7 +187,7 @@ function toCliError(error: CompileError): CliError {
         ],
       })
     case 'CompilerNotStarted':
-      return startError(error.pathToElm, error.code.withDefault(''), error.cause)
+      return { ...startError(error), details: lookupLines(error.details.lookup) }
     case 'CompilerStopped':
       return stoppedError(error.pathToElm, error.reason, error.cause)
     case 'CompileFailed':
@@ -170,6 +219,7 @@ function toCliError(error: CompileError): CliError {
     case 'ProgramNotLoaded':
       return LoadError.toCliError(error.loadError)
     case 'ModuleNotFound': {
+      const sources = error.sources.join(', ')
       const dotted = dottedModule(error.moduleName, error.suggestions)
       // The module exists, and only the dot in its name stops compileWorker.
       const exists = error.suggestions.includes(error.moduleName)
@@ -180,18 +230,18 @@ function toCliError(error: CompileError): CliError {
             (name) =>
               `compileWorker starts only a module whose name has no dot. Give the entry module a name without a dot, for example Main in a project of its own. Or load the program with compileRunnableProgram, and start Elm.${name} yourself.`
           )
-          .withDefault(moduleNameFix(error.moduleName, error.suggestions, error.file)),
+          .withDefault(moduleNameFix(error.moduleName, error.suggestions, sources)),
         summary: exists
           ? `"${error.moduleName}" has a dot in its name.`
-          : `"${error.moduleName}" is not in ${error.file}.`,
+          : `"${error.moduleName}" is not in ${sources}.`,
         whatHappened: [
-          `compileWorker compiled ${error.file}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
+          `compileWorker compiled ${sources}, then tried to start the module "${error.moduleName}", the name given as moduleName.`,
           ...(exists
             ? []
             : [
                 error.suggestions.length === 0
-                  ? `${error.file} has no module with that name.`
-                  : `${error.file} has only these modules: ${error.suggestions.join(', ')}.`,
+                  ? `${sources} has no module with that name.`
+                  : `${sources} has only these modules: ${error.suggestions.join(', ')}.`,
               ]),
           ...dotted
             .map((name) => [
@@ -206,16 +256,16 @@ function toCliError(error: CompileError): CliError {
         solution: `Check the flags passed to compileWorker: they must match the type that the init function of ${error.moduleName} expects.`,
         summary: splitFirstLine(error.cause)[0],
         whatHappened: [
-          `compileWorker compiled ${error.file} and called the init function of "${error.moduleName}", which threw an error.`,
+          `compileWorker compiled ${error.sources.join(', ')} and called the init function of "${error.moduleName}", which threw an error.`,
           ...splitFirstLine(error.cause)[1],
         ],
       })
     case 'NoPorts':
       return CliError.create({
-        solution: `Declare a port in ${error.file}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
+        solution: `Declare a port in ${error.sources.join(', ')}. See how to declare a port in Elm: https://guide.elm-lang.org/interop/ports.html`,
         summary: `"${error.moduleName}" declares no port.`,
         whatHappened: [
-          `compileWorker compiled ${error.file} and started the module "${error.moduleName}", which declares no ports.`,
+          `compileWorker compiled ${error.sources.join(', ')} and started the module "${error.moduleName}", which declares no ports.`,
           'Node exchanges data with a worker only through ports, so a worker without ports cannot receive input or return a result.',
         ],
       })
@@ -325,7 +375,7 @@ function dottedModule(moduleName: string, suggestions: ReadonlyArray<string>): M
  *
  * @param moduleName - the name that was given
  * @param suggestions - the modules that the file has
- * @param file - the Elm file that was compiled
+ * @param file - the Elm files that were compiled, joined with commas
  * @returns the next step
  */
 function moduleNameFix(moduleName: string, suggestions: ReadonlyArray<string>, file: string): string {
@@ -342,24 +392,31 @@ function moduleNameFix(moduleName: string, suggestions: ReadonlyArray<string>, f
 
 /**
  * Describes a compiler that could not start, with the step that fixes the
- * most common causes.
+ * most common causes. A missing compiler is explained in two ways: a name was
+ * looked up in the folders of the `PATH`, and a path pointed to no file.
  *
- * @param pathToElm - the binary that was started
- * @param code - the code of the system, such as ENOENT, or an empty string
- * @param cause - the message of the system
+ * @param error - the compiler that did not start
  * @returns the error for a person
  */
-function startError(pathToElm: string, code: string, cause: string): CliError {
-  switch (code) {
+function startError(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): CliError {
+  const { cause, pathToElm } = error
+
+  switch (error.code.withDefault('')) {
     case 'ENOENT':
-      return CliError.create({
-        solution:
-          'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
-        summary: `"${pathToElm}"`,
-        whatHappened: [
-          `The build tried to run "${pathToElm}", and the system found no program with that name or path.`,
-        ],
-      })
+      return (
+        foundFile(error)
+          // The file exists, so the missing piece is the working directory or the interpreter of a script.
+          .map((file) =>
+            CliError.create({
+              solution: `Check that the folder in cwd exists. If ${file} is a script, check that the program on its first line is installed.`,
+              summary: `"${pathToElm}"`,
+              whatHappened: [
+                `The build found ${file}, but the system could not start it, and reported that something does not exist.`,
+              ],
+            })
+          )
+          .withDefault(notFoundError(error))
+      )
     case 'EACCES':
       return CliError.create({
         solution: `Make it executable with \`chmod +x ${pathToElm}\`, then try again.`,
@@ -431,3 +488,41 @@ function stoppedError(pathToElm: string, reason: 'maxBuffer' | 'signal' | 'timeo
  * ```
  */
 export const CompileError = { title, toCliError }
+
+/**
+ * Finds the file that the system started for a compiler that did not start,
+ * when one exists.
+ *
+ * @param error - the compiler that did not start
+ * @returns `Just` the absolute path of the file, or `Nothing` when no file was found
+ */
+function foundFile(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): Maybe<string> {
+  // On Windows a name stays unresolved, so only an absolute path proves that a file was found.
+  return error.details.lookup.binary.andThen((binary) => (path.isAbsolute(binary) ? Maybe.Just(binary) : Maybe.Nothing))
+}
+
+/**
+ * Describes a compiler that the system did not find: a name in no folder of
+ * the `PATH`, or a path to no file.
+ *
+ * @param error - the compiler that did not start
+ * @returns the error, with the step that fits a name or a path
+ */
+function notFoundError(error: Extract<CompileError, { type_: 'CompilerNotStarted' }>): CliError {
+  return error.details.lookup.searchPath.length > 0
+    ? CliError.create({
+        solution:
+          'Install Elm in the project with `npm install --save-dev elm`, or set pathToElm to the path of the elm binary.',
+        summary: `"${error.pathToElm}"`,
+        whatHappened: [
+          `The build looked for "${error.pathToElm}" in each folder of the PATH, in the order below, and found no program with that name.`,
+        ],
+      })
+    : CliError.create({
+        solution: 'Check the path in pathToElm. A relative path starts from cwd.',
+        summary: `"${error.pathToElm}"`,
+        whatHappened: [
+          `The build tried to run ${path.resolve(error.details.lookup.cwd, error.pathToElm)}, and no file exists at that path.`,
+        ],
+      })
+}
