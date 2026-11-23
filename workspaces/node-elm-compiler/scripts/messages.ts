@@ -4,9 +4,9 @@
  *
  * The first part prints each case of `CompileError` as a command line tool
  * prints it, with its title and `CliError.print`. The second part runs each path that writes
- * to the console: the log of `verbose`, the warnings about `elm.json`, the
+ * to the console: the command and the summary of `verbose`, the warnings about `elm.json`, the
  * error of the deprecated `findAllDependencies`, and the lines that Elm itself
- * prints. Every case comes from a real call on the projects in
+ * prints, which only its own case shows. Every case comes from a real call on the projects in
  * `test/fixtures`, with the pinned Elm compiler, except `OutputNotRead`, which
  * no call can cause on purpose.
  *
@@ -20,7 +20,7 @@
 
 import { EventEmitter } from 'node:events'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { CliError, type Result, findElmBinary } from '@elm-toolkit/cli-lib'
@@ -82,6 +82,30 @@ async function withEnv<A>(changes: Record<string, string>, run: () => Promise<A>
       }
     }
   }
+}
+
+/**
+ * Runs a function without the warning that a program built without
+ * `--optimize` prints when it loads. The section of the errors shows only the
+ * error; the warning has its own case among the logs.
+ *
+ * @param run - the function to run
+ * @returns what the function returns
+ */
+function withoutDevModeWarning<A>(run: () => A | Promise<A>): Promise<A> {
+  const warn = console.warn
+
+  console.warn = (...args: unknown[]): void => {
+    if (!String(args[0]).startsWith('Compiled in DEV mode')) {
+      warn(...args)
+    }
+  }
+
+  return Promise.resolve()
+    .then(run)
+    .finally(() => {
+      console.warn = warn
+    })
 }
 
 /**
@@ -167,8 +191,13 @@ const errors: ReadonlyArray<[string, () => CompileError | Promise<CompileError>]
     (): CompileError => errorOf(prepareProcessArgs('src/Main.elm', { optimise: true } as CompilerOptions)),
   ],
   [
-    'CompilerNotStarted: ENOENT',
+    'CompilerNotStarted: ENOENT, a name that no folder of the PATH has',
     async (): Promise<CompileError> => errorOf(await dryCompile('src/Main.elm', { cwd: app, pathToElm: 'elm-0.19' })),
+  ],
+  [
+    'CompilerNotStarted: ENOENT, a path that does not exist',
+    async (): Promise<CompileError> =>
+      errorOf(await dryCompile('src/Main.elm', { cwd: app, pathToElm: 'node_modules/.bin/elm' })),
   ],
   [
     'CompilerNotStarted: EACCES',
@@ -255,6 +284,30 @@ const logs: ReadonlyArray<[string, () => unknown]> = [
   ['verbose, a build that succeeds', (): unknown => compileToString('src/Main.elm', { ...inApp, verbose: true })],
   ['verbose, a build that fails', (): unknown => dryCompile('src/Broken.elm', { ...inApp, verbose: true })],
   [
+    'verbose, every flag set, and an ELM_HOME of the caller',
+    (): unknown =>
+      dryCompile('src/Main.elm', {
+        ...inApp,
+        debug: true,
+        // The default folder, so that Elm downloads nothing.
+        processOpts: { env: { ELM_HOME: path.join(homedir(), '.elm') } },
+        report: 'json',
+        runtimeOptions: ['-A64m'],
+        verbose: true,
+      }),
+  ],
+  [
+    'verbose, a binary found through the PATH',
+    (): unknown =>
+      withEnv({ PATH: `${path.dirname(elm)}${path.delimiter}${process.env.PATH ?? ''}` }, () =>
+        dryCompile('src/Main.elm', { cwd: app, verbose: true })
+      ),
+  ],
+  [
+    'verbose, compileSync, where Elm prints to the terminal',
+    (): unknown => compileSync('src/Main.elm', { ...inApp, output: '/dev/null', verbose: true }),
+  ],
+  [
     'verbose, compileSync of the deprecated API, where Elm prints to the terminal',
     (): unknown => legacy.compileSync('src/Main.elm', { ...inApp, output: '/dev/null', verbose: true }),
   ],
@@ -273,9 +326,11 @@ try {
   console.log('#################### Errors, as CompileError.title and CompileError.toCliError describe them')
 
   for (const [name, make] of errors) {
-    const error = await make()
-
+    // The header goes first, so that what a call prints stays in its case.
     console.log(`\n========== ${name}`)
+
+    const error = await withoutDevModeWarning(make)
+
     CliError.print(CompileError.title(error), CompileError.toCliError(error))
   }
 

@@ -138,17 +138,21 @@ describe('compileProgram', () => {
     assert.match(RunnerError.toCliError(error).summary, /^TODO in module `CrashesOnLoad` on line \d+$/)
   })
 
-  it('prints the compiler command and the messages of Elm with verbose, and nothing without it', async (t) => {
+  it('prints the compiler command, its summary and the messages of Elm with verbose, and nothing without it', async (t) => {
+    const informed = t.mock.method(console, 'info', () => undefined)
     const logged = t.mock.method(console, 'log', () => undefined)
 
     await compileProgram(['src/Main.elm'], { verbose: true })
 
-    assert.match(String(logged.mock.calls[0]?.arguments[0]), /^Running \S*elm make src\/Main\.elm --output \S+\.js$/)
-    assert.ok(logged.mock.callCount() >= 2, 'the messages of Elm follow the command')
+    assert.match(String(informed.mock.calls[0]?.arguments[1]), /^\S*elm make src\/Main\.elm --output \S+\.js$/)
+    assert.match(String(informed.mock.calls[1]?.arguments[0]), /^ {8}Binary: +\S*elm$/m)
+    assert.ok(logged.mock.callCount() >= 1, 'the messages of Elm follow the command')
 
+    informed.mock.resetCalls()
     logged.mock.resetCalls()
     await compileProgram(['src/Main.elm'])
 
+    assert.equal(informed.mock.callCount(), 0)
     assert.equal(logged.mock.callCount(), 0)
   })
 })
