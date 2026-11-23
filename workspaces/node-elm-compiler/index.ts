@@ -75,7 +75,7 @@ export type { CompilerOptions, CompilerProcessOptions } from './process.ts'
  * an `Error` for an option that this module does not know
  */
 export function compile(sources: unknown, options: CompilerOptions): ChildProcess {
-  return orThrow(resultApi.compile(legacySources(sources), options))
+  return orThrow(resultApi.compile(legacySources(sources), options)).compilerProcess
 }
 
 /**
@@ -151,9 +151,15 @@ export async function compileToString(sources: unknown, options: CompilerOptions
         case 'CompilerNotStarted':
           return remembered.threw()
             ? error
-            : { exitCode: null, output: legacyStartMessage(error), sources: [], type_: 'CompileFailed' }
+            : {
+                details: error.details,
+                exitCode: null,
+                output: legacyStartMessage(error),
+                sources: [],
+                type_: 'CompileFailed',
+              }
         case 'CompilerStopped':
-          return { exitCode: null, output: '', sources: [], type_: 'CompileFailed' }
+          return { details: error.details, exitCode: null, output: '', sources: [], type_: 'CompileFailed' }
         case 'UnknownOption':
         case 'CompileFailed':
         case 'TempFolderNotCreated':
@@ -167,7 +173,7 @@ export async function compileToString(sources: unknown, options: CompilerOptions
           return error
       }
     })
-  )
+  ).javascript
 }
 
 /**
@@ -195,7 +201,7 @@ export function compileToStringSync(sources: unknown, options: CompilerOptions):
 
   switch (compiled.type_) {
     case 'Ok':
-      return compiled.value
+      return compiled.value.javascript
     case 'Err':
       switch (compiled.error.type_) {
         // The original let a throw of spawn pass, and reported a compiler that ran badly as a failed build.
@@ -252,12 +258,21 @@ export async function compileWorker(
   modulePath: string,
   moduleName: string,
   workerArgs: unknown
-): Promise<resultApi.WorkerWithPorts> {
-  const started = await resultApi.compileWorker(projectRootDir, modulePath, moduleName, workerArgs)
+): Promise<Omit<resultApi.WorkerWithPorts, 'details'>> {
+  const started = await resultApi.compileWorker({
+    compilerOptions: { cwd: projectRootDir },
+    moduleName,
+    sources: modulePath,
+    workerArgs,
+  })
 
   switch (started.type_) {
     case 'Ok':
-      return started.value
+      // The original returned the worker of Elm alone, without the details of the run.
+      return Object.fromEntries(Object.entries(started.value).filter(([key]) => key !== 'details')) as Omit<
+        resultApi.WorkerWithPorts,
+        'details'
+      >
     case 'Err': {
       const cause = workerMessage(started.error)
 
