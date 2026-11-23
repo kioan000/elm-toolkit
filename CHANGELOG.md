@@ -8,6 +8,27 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-11-23
+
+### What's new
+
+When several Elm installations exist on a machine, a build could use one of
+them without saying which. Now `verbose` prints the binary that runs, with its
+flags, its folders and its `ELM_HOME`, and the Result API returns the same data
+in `details`. See [#20](https://github.com/kioan000/elm-toolkit/issues/20).
+
+A compiler that cannot start now says where the system looked for it: the
+folders of the `PATH` in order, or the file that does not exist. The webpack
+loader shows the same message, without a stack trace.
+
+Three changes need an edit in your project: the functions of the Result API
+that start the compiler return an object, `compileWorker` takes one record, and
+`elm-node-runner` replaces `--log-info` with `--verbose`.
+[UPGRADING.md](https://github.com/kioan000/elm-toolkit/blob/main/UPGRADING.md#from-010-alpha3-to-010-alpha4)
+shows the steps.
+
+### All changes
+
 #### node-elm-compiler
 
 **Breaking changes**
@@ -341,7 +362,8 @@ and they are not on the npm registry.
 - `@elm-toolkit/elm-node-runner`: a command that runs an Elm program in Node.
 - `@elm-toolkit/cli-lib`: the helpers that the command line tools share.
 
-[Unreleased]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.3...HEAD
+[Unreleased]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.4...HEAD
+[0.1.0-alpha.4]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/kioan000/elm-toolkit/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/kioan000/elm-toolkit/releases/tag/v0.1.0-alpha.1
