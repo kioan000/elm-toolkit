@@ -34,16 +34,19 @@ version. Point the dependency at the URL of the archive:
 ```json
 {
   "dependencies": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz",
+    "@elm-toolkit/cli-lib": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-cli-lib-0.1.0-alpha.4.tgz"
   }
 }
 ```
 
-Some packages depend on other packages of this repository, for example the
-webpack loader on `@elm-toolkit/node-elm-compiler`. Their manifests ask for those
-packages by version, which the npm registry cannot provide. List the archive of
-each of them as well; the `dependencies` field in the `package.json` of a
-package names them.
+The packages depend on other packages of this repository. Every package except
+`@elm-toolkit/cli-lib` needs `@elm-toolkit/cli-lib`, the library that they
+share, and some need more: the webpack loader also needs
+`@elm-toolkit/node-elm-compiler`. Their manifests ask for those packages by
+version, which the npm registry cannot provide, so the install fails with a 404
+when one of them is missing. List the archive of each of them as well; the
+`dependencies` field in the `package.json` of a package names them.
 
 npm uses the archives you list. Yarn looks for those dependencies on the
 registry, so it also needs them in `resolutions`:
@@ -52,10 +55,12 @@ registry, so it also needs them in `resolutions`:
 {
   "dependencies": {
     "@elm-toolkit/webpack-elm-loader": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-webpack-elm-loader-0.1.0-alpha.4.tgz",
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz",
+    "@elm-toolkit/cli-lib": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-cli-lib-0.1.0-alpha.4.tgz"
   },
   "resolutions": {
-    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz"
+    "@elm-toolkit/node-elm-compiler": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-node-elm-compiler-0.1.0-alpha.4.tgz",
+    "@elm-toolkit/cli-lib": "https://github.com/kioan000/elm-toolkit/releases/download/v0.1.0-alpha.4/elm-toolkit-cli-lib-0.1.0-alpha.4.tgz"
   }
 }
 ```
