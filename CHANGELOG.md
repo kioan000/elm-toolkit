@@ -8,6 +8,12 @@ A version with a hyphen, such as `0.1.0-alpha.2`, is a pre-release.
 
 ## [Unreleased]
 
+#### Documentation
+
+- The README lists `@elm-toolkit/cli-lib` in the examples of an install from a
+  release. Every other package needs it, and an install without it failed with a 404. Thanks to [@turboMaCk](https://github.com/turboMaCk) for the report in
+  [#19](https://github.com/kioan000/elm-toolkit/issues/19).
+
 ## [0.1.0-alpha.4] - 2026-11-23
 
 ### What's new
